@@ -100,7 +100,7 @@ private fun FilterButtons(
         SegmentedButton(
             selected = selectedLogTypeId == null,
             onClick = { onFilterSelect(null) },
-            shape = SegmentedButtonDefaults.itemShape(position = 0, count = logTypes.size + 1)
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = logTypes.size + 1)
         ) {
             Text("全部")
         }
@@ -110,7 +110,7 @@ private fun FilterButtons(
             SegmentedButton(
                 selected = selectedLogTypeId == logType.id,
                 onClick = { onFilterSelect(logType.id) },
-                shape = SegmentedButtonDefaults.itemShape(position = index + 1, count = logTypes.size + 1)
+                shape = SegmentedButtonDefaults.itemShape(index = index + 1, count = logTypes.size + 1)
             ) {
                 Text(logType.name)
             }
