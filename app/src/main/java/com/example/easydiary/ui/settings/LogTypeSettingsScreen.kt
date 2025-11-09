@@ -40,6 +40,11 @@ fun LogTypeSettingsScreen(
         }
     }
 
+    // (*** 1. 新增: 检查保存按钮是否可用 ***)
+    val isSaveEnabled = remember(localTypes) {
+        localTypes.none { it.name.isBlank() } // 确保没有空名称
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -51,10 +56,13 @@ fun LogTypeSettingsScreen(
                 },
                 actions = {
                     // L15: 保存按钮
-                    IconButton(onClick = {
-                        viewModel.updateLogTypes(localTypes)
-                        onBack()
-                    }) {
+                    IconButton(
+                        onClick = {
+                            viewModel.updateLogTypes(localTypes)
+                            onBack()
+                        },
+                        enabled = isSaveEnabled // (*** 2. 设置可用性 ***)
+                    ) {
                         Icon(Icons.Default.Check, "保存")
                     }
                 }
@@ -91,13 +99,29 @@ private fun LogTypeEditor(
     logType: LogType,
     onTypeChange: (LogType) -> Unit
 ) {
+    val charLimit = 10 // (*** 3. 定义字数限制 ***)
+
     Column {
         // L15: 编辑名称
         OutlinedTextField(
             value = logType.name,
-            onValueChange = { onTypeChange(logType.copy(name = it)) },
+            onValueChange = {
+                // (*** 4. 限制输入长度 ***)
+                if (it.length <= charLimit) {
+                    onTypeChange(logType.copy(name = it))
+                }
+            },
             label = { Text("卡片 ${logType.order + 1} 名称") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            isError = logType.name.isBlank(), // (*** 5. 错误状态 ***)
+            supportingText = { // (*** 6. 辅助文本 ***)
+                if (logType.name.isBlank()) {
+                    Text("名称不能为空")
+                } else {
+                    Text("${logType.name.length} / $charLimit")
+                }
+            }
         )
 
         Spacer(Modifier.height(8.dp))

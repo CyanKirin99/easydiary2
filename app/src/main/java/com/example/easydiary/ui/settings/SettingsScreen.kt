@@ -42,7 +42,7 @@ fun SettingsScreen(
                 icon = Icons.Default.Edit,
                 title = "记录类型",
                 subtitle = "自定义3个日记卡片",
-                onClick = { onNavigate(Screen.LogTypeSettings.route) } // (L15 - 已完成)
+                onClick = { onNavigate(Screen.LogTypeSettings.route) }
             )
         }
         item {
@@ -50,7 +50,7 @@ fun SettingsScreen(
                 icon = Icons.Default.ViewDay,
                 title = "视图选择",
                 subtitle = "设置主页日历视图",
-                onClick = { onNavigate(Screen.ViewSettings.route) } // (L14 - 已完成)
+                onClick = { onNavigate(Screen.ViewSettings.route) }
             )
         }
         item {
@@ -58,7 +58,7 @@ fun SettingsScreen(
                 icon = Icons.Default.WbSunny,
                 title = "显示模式",
                 subtitle = "切换浅色或深色模式",
-                onClick = { onNavigate(Screen.ThemeSettings.route) } // (L19 - 已完成)
+                onClick = { onNavigate(Screen.ThemeSettings.route) }
             )
         }
 
@@ -71,7 +71,7 @@ fun SettingsScreen(
                 icon = Icons.Default.BarChart,
                 title = "统计分析",
                 subtitle = "查看您的心情和时长曲线",
-                onClick = { onNavigate(Screen.Statistics.route) } // (*** 修复 L16 ***)
+                onClick = { onNavigate(Screen.Statistics.route) }
             )
         }
 
@@ -79,7 +79,23 @@ fun SettingsScreen(
             Divider(Modifier.padding(vertical = 8.dp))
         }
 
-        // ... (L17, L18 items remain the same) ...
+        // (*** 1. 新增: L17, L18 ***)
+        item {
+            SettingsItem(
+                icon = Icons.Default.Upload,
+                title = "导出数据",
+                subtitle = "将所有数据备份为 .zip 文件",
+                onClick = { onNavigate(Screen.DataIO.route) } // (*** 2. 使用新路由 ***)
+            )
+        }
+        item {
+            SettingsItem(
+                icon = Icons.Default.Download,
+                title = "导入数据",
+                subtitle = "从 .zip 备份文件恢复",
+                onClick = { onNavigate(Screen.DataIO.route) } // (*** 3. 使用新路由 ***)
+            )
+        }
     }
 }
 
