@@ -1,139 +1,189 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/AppNavigation.kt
-
-@file:OptIn(ExperimentalMaterial3Api::class) // 确保添加这一行
-
 package com.example.easydiary.ui
 
-// 导入所有屏幕和 ViewModel 的定义
-import com.example.easydiary.data.DiaryEntry
-import com.example.easydiary.ui.calendar.CalendarScreen
-import com.example.easydiary.ui.curve.CurveScreen
-import com.example.easydiary.ui.editor.DiaryEditorScreen
-import com.example.easydiary.ui.query.QueryListScreen
-import com.example.easydiary.ui.viewer.DiaryViewerScreen
-
-// 导入所有需要的 UI 组件
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.example.easydiary.ui.entry.EntryScreen
+import com.example.easydiary.ui.home.HomeScreen
+import com.example.easydiary.ui.settings.LogTypeSettingsScreen
+import com.example.easydiary.ui.settings.SettingsScreen
+import com.example.easydiary.ui.settings.ThemeSettingsScreen
+import com.example.easydiary.ui.settings.ViewSettingsScreen
+import com.example.easydiary.ui.statistics.StatisticsScreen
 import java.time.LocalDate
 
-// --- 1. 导航入口 (签名已完全更新) ---
+// V2 导航路由
+sealed class Screen(val route: String, val label: String? = null, val icon: ImageVector? = null) {
+    object Home : Screen("home", "主页", Icons.Default.Home)
+    object Settings : Screen("settings", "我的", Icons.Default.Person)
+    object Add : Screen(route = "entry") {
+        const val routeTemplate = "entry/{date}"
+        fun createRoute(date: LocalDate): String = "entry/${date}"
+    }
+    object LogTypeSettings : Screen("log_type_settings")
+    object ThemeSettings : Screen("theme_settings")
+    object ViewSettings : Screen("view_settings")
+    object Statistics : Screen("statistics")
+}
+
+val navItems = listOf(Screen.Home, Screen.Settings)
+
 @Composable
-fun AppNavigation(
-    uiState: DiaryUiState,
-    allEntriesASC: List<DiaryEntry>,
-    selectedDate: LocalDate,
-    onDateSelected: (LocalDate) -> Unit,
-    onNavigate: (NavigationState) -> Unit,
-    onQuery: (QueryType) -> Unit,
-    onSave: (DiaryEntry) -> Unit,
-    onExport: () -> Unit,
-    onBack: () -> Unit,
-    onEditorDateChange: (LocalDate) -> Unit,
-    onViewNextDay: () -> Unit,
-    onViewPreviousDay: () -> Unit,
-    onDelete: (LocalDate) -> Unit
-) {
+fun AppNavigation(viewModel: DiaryViewModel) {
+    val navController = rememberNavController()
+
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+    val isMainScreen = navItems.any { it.route == currentDestination?.route }
+
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(
-                currentScreen = uiState.currentScreen,
-                onNavigate = onNavigate,
-                onQuery = onQuery
-            )
+            if (isMainScreen) {
+                AppBottomBar(
+                    navController = navController,
+                    currentDestination = currentDestination
+                )
+            }
         },
         floatingActionButton = {
-            if (uiState.currentScreen == NavigationState.CALENDAR) {
-                FloatingActionButton(onClick = { onNavigate(NavigationState.EDITOR) }) {
-                    Icon(Icons.Default.Add, contentDescription = "添加新日记")
+            if (isMainScreen) {
+                FloatingActionButton(
+                    onClick = {
+                        navController.navigate(Screen.Add.createRoute(LocalDate.now()))
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ) {
+                    Icon(Icons.Default.Add, "添加", modifier = Modifier.size(36.dp))
                 }
             }
-        }
+        },
+        floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
-            when (uiState.currentScreen) {
-                NavigationState.CALENDAR -> CalendarScreen(
-                    selectedDate = selectedDate,
-                    onDateSelected = onDateSelected,
-                    allEntries = allEntriesASC
-                )
-                NavigationState.EDITOR -> DiaryEditorScreen(
-                    entry = uiState.currentEntry,
-                    selectedDate = selectedDate,
-                    onSave = onSave,
-                    onBack = onBack,
-                    onDateChanged = onEditorDateChange
-                )
-                NavigationState.VIEWER -> DiaryViewerScreen(
-                    entry = uiState.currentEntry,
-                    selectedDate = selectedDate,
-                    onEdit = { onNavigate(NavigationState.EDITOR) },
-                    onBack = onBack,
-                    onExport = onExport,
-                    onSwipeNext = onViewNextDay,
-                    onSwipePrevious = onViewPreviousDay,
-                    onDelete = onDelete
-                )
-                NavigationState.QUERY -> QueryListScreen(
-                    queryType = uiState.queryType,
-                    entries = uiState.queryResults,
-                    onEntryClick = onDateSelected
-                )
-                NavigationState.CURVE -> CurveScreen(
-                    entries = allEntriesASC,
-                    onDateSelected = onDateSelected
-                )
-            }
-        }
-    }
-}
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Home.route,
+            modifier = Modifier.padding(paddingValues)
+        ) {
 
-// --- 2. 底部导航栏 (修改：新图标) ---
-@Composable
-fun BottomNavigationBar(
-    currentScreen: NavigationState,
-    onNavigate: (NavigationState) -> Unit,
-    onQuery: (QueryType) -> Unit
-) {
-    val navItems = listOf(
-        BottomNavItem("日历", Icons.Default.CalendarMonth, NavigationState.CALENDAR),
-        BottomNavItem("学习", Icons.Default.Book, QueryType.STUDY), // 书本
-        BottomNavItem("生活", Icons.Default.FilterVintage, QueryType.LIFE), // 花朵
-        BottomNavItem("杂事", Icons.Default.Hardware, QueryType.MISC), // 锤子
-        BottomNavItem("曲线", Icons.Default.QueryStats, NavigationState.CURVE)
-    )
-
-    NavigationBar {
-        navItems.forEach { item ->
-            val isSelected = when (item.navTarget) {
-                is NavigationState -> item.navTarget == currentScreen
-                is QueryType -> currentScreen == NavigationState.QUERY
-                else -> false
-            }
-
-            NavigationBarItem(
-                icon = { Icon(item.icon, contentDescription = item.label) },
-                label = { Text(item.label) },
-                selected = isSelected,
-                onClick = {
-                    when (item.navTarget) {
-                        is NavigationState -> onNavigate(item.navTarget)
-                        is QueryType -> onQuery(item.navTarget)
+            composable(Screen.Home.route) {
+                HomeScreen(
+                    viewModel = viewModel,
+                    onDateClick = { date ->
+                        navController.navigate(Screen.Add.createRoute(date))
                     }
-                }
-            )
+                )
+            }
+
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    onNavigate = { route -> navController.navigate(route) }
+                )
+            }
+
+            composable(Screen.Add.routeTemplate) { backStackEntry ->
+                val dateStr = backStackEntry.arguments?.getString("date") ?: LocalDate.now().toString()
+                val selectedDate = LocalDate.parse(dateStr)
+
+                EntryScreen(
+                    viewModel = viewModel,
+                    selectedDate = selectedDate,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.LogTypeSettings.route) {
+                LogTypeSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.ThemeSettings.route) {
+                ThemeSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.ViewSettings.route) {
+                ViewSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Statistics.route) {
+                StatisticsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
 
-private data class BottomNavItem(
-    val label: String,
-    val icon: ImageVector,
-    val navTarget: Any
-)
+// (*** 修复: 重新添加 AppBottomBar ***)
+@Composable
+fun AppBottomBar(
+    navController: NavHostController,
+    currentDestination: NavDestination?
+) {
+    NavigationBar {
+        CustomNavItem(
+            screen = Screen.Home,
+            currentDestination = currentDestination,
+            onClick = { navController.navigate(Screen.Home.route) }
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = { /* Do Nothing */ },
+            icon = { /* Empty */ },
+            enabled = false
+        )
+        CustomNavItem(
+            screen = Screen.Settings,
+            currentDestination = currentDestination,
+            onClick = { navController.navigate(Screen.Settings.route) }
+        )
+    }
+}
+
+// (*** 修复: 重新添加 CustomNavItem ***)
+@Composable
+fun RowScope.CustomNavItem(
+    screen: Screen,
+    currentDestination: NavDestination?,
+    onClick: () -> Unit
+) {
+    NavigationBarItem(
+        selected = currentDestination.isRoute(screen.route),
+        onClick = onClick,
+        icon = { Icon(screen.icon!!, contentDescription = screen.label) },
+        label = { Text(screen.label!!) }
+    )
+}
+
+// (*** 修复: 重新添加 isRoute ***)
+fun NavDestination?.isRoute(route: String): Boolean {
+    return this?.hierarchy?.any { it.route == route } == true
+}

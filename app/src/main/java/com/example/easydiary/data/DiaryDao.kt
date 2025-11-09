@@ -1,36 +1,54 @@
+// 文件位置: app/src/main/java/com/example/easydiary/data/DiaryDao.kt
 package com.example.easydiary.data
 
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
+import androidx.room.*
+import com.example.easydiary.data.model.*
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DiaryDao {
 
-    // 插入或更新，如果日期已存在则替换
+    // --- LogType (L15) ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertOrUpdate(entry: DiaryEntry)
+    suspend fun insertLogType(logType: LogType): Long
 
-    // 查询特定日期的日记
+    @Query("SELECT * FROM log_types ORDER BY `order` ASC")
+    fun getLogTypes(): Flow<List<LogType>>
+
+    @Query("SELECT * FROM log_types WHERE id = :id")
+    suspend fun getLogTypeById(id: Long): LogType?
+
+    @Update
+    suspend fun updateLogType(logType: LogType)
+
+    // --- DiaryEntry & Details ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDiaryEntry(entry: DiaryEntry)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLogItem(logItem: LogItem): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTextEntry(textEntry: TextEntry)
+
+    @Transaction
     @Query("SELECT * FROM diary_entries WHERE date = :date")
-    fun getEntryByDate(date: String): Flow<DiaryEntry?>
+    fun getDiaryEntryWithDetails(date: String): Flow<DiaryEntryWithDetails?>
 
-    // 查询所有日记（降序，用于查询列表）
-    @Query("SELECT * FROM diary_entries ORDER BY date DESC")
-    fun getAllEntries(): Flow<List<DiaryEntry>>
+    @Query("SELECT * FROM diary_entries")
+    fun getAllDiaryEntries(): Flow<List<DiaryEntry>>
 
-    // 查询最近 14 天的日记 (用于旧的图表，保留)
-    @Query("SELECT * FROM diary_entries ORDER BY date DESC LIMIT :limit")
-    fun getRecentEntries(limit: Int): Flow<List<DiaryEntry>>
-
-    // 查询所有日记（升序，用于新的可拖动图表）
-    @Query("SELECT * FROM diary_entries ORDER BY date ASC")
-    fun getAllEntriesSortedByDateASC(): Flow<List<DiaryEntry>>
-
-    // **新增：按日期删除条目**
     @Query("DELETE FROM diary_entries WHERE date = :date")
-    suspend fun deleteByDate(date: String)
-}
+    suspend fun deleteDiaryEntryByDate(date: String)
 
+    @Query("DELETE FROM log_items WHERE id = :logItemId")
+    suspend fun deleteLogItem(logItemId: Long)
+
+    @Query("SELECT * FROM log_items")
+    fun getAllLogItems(): Flow<List<LogItem>> // (此项将被废弃，但暂不移除)
+
+    // (*** 新增: L16 - 获取所有 LogItems 及其 TextEntries, 按日期降序 ***)
+    @Transaction
+    @Query("SELECT * FROM log_items ORDER BY diaryDate DESC")
+    fun getAllLogItemsWithTexts(): Flow<List<LogItemWithTexts>>
+}

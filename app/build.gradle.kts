@@ -1,10 +1,8 @@
+// 文件位置: app/build.gradle.kts
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
-
-    // 我们将依赖 composeOptions，而不是在插件中声明 Compose Compiler
-    // （这在您的环境中似乎更稳定）
 }
 
 android {
@@ -17,6 +15,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -41,7 +40,7 @@ android {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
 
-    // **修复：统一 Java 编译环境为 Java 17**
+    // 统一 Java 编译环境为 Java 17
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -52,12 +51,11 @@ android {
 }
 
 dependencies {
+
     // 统一版本号
     val roomVersion = "2.6.1"
     val navVersion = "2.7.5"
 
-    // **1. 关键修复：更新 Compose BOM 到一个更新的稳定版本**
-    // 这将获取最新的 material3 库，解决 ListItem 签名问题
     val composeBomVersion = "2024.05.00"
     implementation(platform("androidx.compose:compose-bom:$composeBomVersion"))
 
@@ -66,13 +64,11 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
 
-    // 核心 M3 库 (将由 BOM 自动管理版本)
+    // 核心 M3 库
     implementation("androidx.compose.material3:material3")
 
     // 图标库
     implementation("androidx.compose.material:material-icons-core")
-    // **2. 关键修复：添加 Icons Extended 库**
-    // 这是解决 "Unresolved reference 'automirrored'" 错误的必需库
     implementation("androidx.compose.material:material-icons-extended")
 
     // --- 其他依赖 (保持不变) ---
@@ -88,6 +84,11 @@ dependencies {
     // --- Compose Navigation ---
     implementation("androidx.navigation:navigation-compose:$navVersion")
 
+    // --- DataStore (L14/L19) ---
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // (*** 修复: 删除了失败的日历库 ***)
+    // implementation("com.github.kizitonwose:Calendar:2.5.1")
+
     // (测试依赖...)
 }
-
