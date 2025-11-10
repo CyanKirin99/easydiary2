@@ -1,8 +1,10 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/statistics/StatisticsScreen.kt
 package com.example.easydiary.ui.statistics
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,34 +13,51 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.easydiary.data.model.DiaryEntry
 import com.example.easydiary.data.model.LogItemWithTexts
 import com.example.easydiary.data.model.LogType
 import com.example.easydiary.ui.DiaryViewModel
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen(
     viewModel: DiaryViewModel,
-    onBack: () -> Unit
-    // (L16) TODO: 实现点击列表项跳转
-    // onLogClick: (LocalDate) -> Unit
+    onBack: () -> Unit,
+    onLogClick: (LocalDate) -> Unit
 ) {
-    // 1. 订阅 L16 数据
     val uiState by viewModel.uiState.collectAsState()
     val logTypes = uiState.logTypes
     val allLogs by viewModel.allLogItemsWithTexts.collectAsState()
+    val allEntries by viewModel.allEntries.collectAsState()
 
-    // 2. 状态：用于 L16 的过滤器
     var selectedLogTypeId by remember { mutableStateOf<Long?>(null) }
 
     val filteredLogs = remember(selectedLogTypeId, allLogs) {
@@ -47,6 +66,13 @@ fun StatisticsScreen(
         } else {
             allLogs.filter { it.logItem.logTypeId == selectedLogTypeId }
         }
+    }
+
+    // (*** 1. 准备排序后的数据 ***)
+    val sortedEntries = remember(allEntries) {
+        allEntries
+            .sortedBy { it.date }
+            .takeLast(30) // 最多显示 30 个点
     }
 
     Scaffold(
@@ -74,11 +100,22 @@ fun StatisticsScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                item {
+                    StatisticsCharts(
+                        sortedEntries = sortedEntries,
+                        allLogs = allLogs,
+                        logTypes = logTypes
+                    )
+                }
+
                 items(filteredLogs, key = { it.logItem.id }) { logItem ->
                     val logType = logTypes.find { it.id == logItem.logItem.logTypeId }
                     LogRecordCard(
                         logItem = logItem,
-                        logType = logType
+                        logType = logType,
+                        onClick = {
+                            onLogClick(LocalDate.parse(logItem.logItem.diaryDate))
+                        }
                     )
                 }
             }
@@ -96,7 +133,6 @@ private fun FilterButtons(
     SingleChoiceSegmentedButtonRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // "全部" 按钮
         SegmentedButton(
             selected = selectedLogTypeId == null,
             onClick = { onFilterSelect(null) },
@@ -104,8 +140,6 @@ private fun FilterButtons(
         ) {
             Text("全部")
         }
-
-        // L15: 动态生成的类型按钮
         logTypes.forEachIndexed { index, logType ->
             SegmentedButton(
                 selected = selectedLogTypeId == logType.id,
@@ -121,12 +155,15 @@ private fun FilterButtons(
 @Composable
 private fun LogRecordCard(
     logItem: LogItemWithTexts,
-    logType: LogType?
+    logType: LogType?,
+    onClick: () -> Unit
 ) {
     Card(
         elevation = CardDefaults.cardElevation(2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
@@ -143,13 +180,10 @@ private fun LogRecordCard(
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
-
             Spacer(Modifier.height(8.dp))
-
             logItem.texts.forEach { text ->
                 Text("• ${text.content}", style = MaterialTheme.typography.bodyLarge)
             }
-
             val duration = logItem.logItem.duration
             if (logType?.hasDuration == true && duration != null && duration > 0f) {
                 Text(
@@ -158,6 +192,198 @@ private fun LogRecordCard(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
                 )
+            }
+        }
+    }
+}
+
+// (*** 2. Canvas: 重写图表 Composable ***)
+@Composable
+private fun StatisticsCharts(
+    sortedEntries: List<DiaryEntry>,
+    allLogs: List<LogItemWithTexts>,
+    logTypes: List<LogType>
+) {
+    // 1. 将数据转换为 YCharts 所需的 Point 列表
+    val (moodPoints, durationPoints) = rememberChartEntries(sortedEntries, allLogs, logTypes)
+    val dates = remember(sortedEntries) {
+        sortedEntries.map {
+            LocalDate.parse(it.date).format(DateTimeFormatter.ofPattern("MM/dd"))
+        }
+    }
+
+    if (sortedEntries.isEmpty()) {
+        Text("暂无数据", modifier = Modifier.padding(16.dp))
+        return
+    }
+
+    val moodColor = MaterialTheme.colorScheme.primary
+    val durationColor = MaterialTheme.colorScheme.secondary
+
+    // --- 3. 心情图表 ---
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("心情曲线 (近30条)", style = MaterialTheme.typography.titleLarge)
+        MinimalLineChart(
+            points = moodPoints,
+            color = moodColor,
+            yAxisLabels = listOf("😢", "😟", "😐", "😊", "🤩"),
+            xAxisLabels = dates,
+            minY = 0f,
+            maxY = 4f
+        )
+
+        // --- 4. 时长图表 ---
+        Text("时长曲线 (近30条)", style = MaterialTheme.typography.titleLarge)
+        val maxDuration = remember(durationPoints) { (durationPoints.maxOrNull() ?: 1f) + 1f }
+        val durationLabels = remember(maxDuration) {
+            val steps = 4
+            (0..steps).map {
+                val value = (it.toFloat() / steps) * maxDuration
+                "${value.roundToInt()}h"
+            }
+        }
+
+        MinimalLineChart(
+            points = durationPoints,
+            color = durationColor,
+            yAxisLabels = durationLabels,
+            xAxisLabels = dates,
+            minY = 0f,
+            maxY = maxDuration
+        )
+    }
+}
+
+// (*** 3. Canvas: 转换数据为原始 Float 列表 ***)
+@Composable
+private fun rememberChartEntries(
+    sortedEntries: List<DiaryEntry>,
+    allLogs: List<LogItemWithTexts>,
+    logTypes: List<LogType>
+): Pair<List<Float>, List<Float>> {
+
+    return remember(sortedEntries, allLogs, logTypes) {
+
+        val moodEntries = sortedEntries.map { it.moodScore.toFloat() }
+
+        val logTypesWithDuration = logTypes.filter { it.hasDuration }.map { it.id }
+        val durationEntries = sortedEntries.map { entry ->
+            allLogs
+                .filter { it.logItem.diaryDate == entry.date }
+                .filter { it.logItem.logTypeId in logTypesWithDuration }
+                .sumOf { (it.logItem.duration ?: 0f).toDouble() }
+                .toFloat()
+        }
+
+        Pair(moodEntries, durationEntries)
+    }
+}
+
+// (*** 4. Canvas: 自定义图表组件 ***)
+@Composable
+private fun MinimalLineChart(
+    points: List<Float>,
+    color: Color,
+    yAxisLabels: List<String>,
+    xAxisLabels: List<String>,
+    minY: Float,
+    maxY: Float,
+    modifier: Modifier = Modifier
+) {
+    if (points.isEmpty()) return
+
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val yAxisWidth = 40.dp // 为 Y 轴标签留出空间
+    val xAxisHeight = 20.dp // 为 X 轴标签留出空间
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(200.dp)
+    ) {
+        // 1. Y 轴标签
+        Column(
+            modifier = Modifier
+                .width(yAxisWidth)
+                .fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.End
+        ) {
+            yAxisLabels.asReversed().forEach {
+                Text(
+                    text = it,
+                    fontSize = 10.sp,
+                    color = labelColor,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+            }
+        }
+
+        // 2. 图表主体
+        Column(modifier = Modifier.fillMaxSize()) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f) // 占据 Y 轴外的剩余空间
+            ) {
+                val chartWidth = size.width
+                val chartHeight = size.height
+
+                // --- 绘制网格线 ---
+                val yStepCount = yAxisLabels.size - 1
+                (0..yStepCount).forEach { i ->
+                    val y = chartHeight * (1f - (i.toFloat() / yStepCount))
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(0f, y),
+                        end = Offset(chartWidth, y),
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
+                    )
+                }
+
+                // --- 准备路径 ---
+                val path = Path()
+                points.forEachIndexed { index, y ->
+                    val xPos = (index.toFloat() / (points.size - 1).coerceAtLeast(1)) * chartWidth
+                    val yPos = chartHeight * (1f - ((y - minY) / (maxY - minY).coerceAtLeast(1f)))
+
+                    if (index == 0) {
+                        path.moveTo(xPos, yPos)
+                    } else {
+                        path.lineTo(xPos, yPos)
+                    }
+                    // 绘制数据点
+                    drawCircle(color = color, radius = 3.dp.toPx(), center = Offset(xPos, yPos))
+                }
+
+                // --- 绘制折线 ---
+                drawPath(
+                    path = path,
+                    color = color,
+                    style = Stroke(
+                        width = 2.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                )
+            }
+
+            // 3. X 轴标签
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(xAxisHeight),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // 只显示第一个和最后一个 X 轴标签，防止重叠
+                val firstLabel = xAxisLabels.firstOrNull() ?: ""
+                val lastLabel = xAxisLabels.lastOrNull() ?: ""
+
+                Text(text = firstLabel, fontSize = 10.sp, color = labelColor)
+                if (xAxisLabels.size > 1) {
+                    Text(text = lastLabel, fontSize = 10.sp, color = labelColor)
+                }
             }
         }
     }

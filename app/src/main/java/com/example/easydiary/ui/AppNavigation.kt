@@ -1,6 +1,7 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/AppNavigation.kt
 package com.example.easydiary.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.easydiary.ui.entry.EntryScreen
 import com.example.easydiary.ui.home.HomeScreen
+// (*** 1. 新增: 导入新屏幕 ***)
+import com.example.easydiary.ui.io.DataIOScreen
 import com.example.easydiary.ui.settings.LogTypeSettingsScreen
 import com.example.easydiary.ui.settings.SettingsScreen
 import com.example.easydiary.ui.settings.ThemeSettingsScreen
@@ -44,17 +47,44 @@ sealed class Screen(val route: String, val label: String? = null, val icon: Imag
     object ThemeSettings : Screen("theme_settings")
     object ViewSettings : Screen("view_settings")
     object Statistics : Screen("statistics")
+    // (*** 2. 新增: 导入/导出路由 ***)
+    object DataIO : Screen("data_io")
 }
 
 val navItems = listOf(Screen.Home, Screen.Settings)
 
 @Composable
-fun AppNavigation(viewModel: DiaryViewModel) {
+fun AppNavigation(
+    viewModel: DiaryViewModel,
+    onFinish: () -> Unit
+) {
     val navController = rememberNavController()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val isMainScreen = navItems.any { it.route == currentDestination?.route }
+
+    var showExitDialog by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = isMainScreen && !showExitDialog) {
+        showExitDialog = true
+    }
+
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = { Text("确认退出") },
+            text = { Text("您确定要退出 Easy Diary 吗？") },
+            confirmButton = {
+                TextButton(onClick = onFinish) {
+                    Text("退出")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitDialog = false }) { Text("取消") }
+            }
+        )
+    }
 
     Scaffold(
         bottomBar = {
@@ -108,7 +138,11 @@ fun AppNavigation(viewModel: DiaryViewModel) {
                 EntryScreen(
                     viewModel = viewModel,
                     selectedDate = selectedDate,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onDateChange = { newDate ->
+                        navController.popBackStack()
+                        navController.navigate(Screen.Add.createRoute(newDate))
+                    }
                 )
             }
 
@@ -135,6 +169,17 @@ fun AppNavigation(viewModel: DiaryViewModel) {
             composable(Screen.Statistics.route) {
                 StatisticsScreen(
                     viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                    onLogClick = { date ->
+                        navController.navigate(Screen.Add.createRoute(date))
+                    }
+                )
+            }
+
+            // (*** 3. 新增: 导入/导出屏幕 ***)
+            composable(Screen.DataIO.route) {
+                DataIOScreen(
+                    viewModel = viewModel,
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -142,7 +187,8 @@ fun AppNavigation(viewModel: DiaryViewModel) {
     }
 }
 
-// (*** 修复: 重新添加 AppBottomBar ***)
+// ... (AppBottomBar, CustomNavItem, isRoute functions 保持不变) ...
+
 @Composable
 fun AppBottomBar(
     navController: NavHostController,
@@ -168,7 +214,6 @@ fun AppBottomBar(
     }
 }
 
-// (*** 修复: 重新添加 CustomNavItem ***)
 @Composable
 fun RowScope.CustomNavItem(
     screen: Screen,
@@ -183,7 +228,6 @@ fun RowScope.CustomNavItem(
     )
 }
 
-// (*** 修复: 重新添加 isRoute ***)
 fun NavDestination?.isRoute(route: String): Boolean {
     return this?.hierarchy?.any { it.route == route } == true
 }

@@ -1,25 +1,37 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/entry/EntryComponents.kt
 package com.example.easydiary.ui.entry
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.easydiary.data.model.LogType
 import kotlin.math.roundToInt
 
@@ -27,9 +39,9 @@ import kotlin.math.roundToInt
 @Composable
 fun MoodSelector(
     selectedScore: Int,
-    onScoreSelect: (Int) -> Unit // (状态提升)
+    onScoreSelect: (Int) -> Unit
 ) {
-    val emojis = listOf("😢", "😟", "😐", "😊", "🤩") // 难过、低落、普通、开心、狂喜
+    val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
 
     Card(
         elevation = CardDefaults.cardElevation(0.dp),
@@ -42,12 +54,20 @@ fun MoodSelector(
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 emojis.forEachIndexed { index, emoji ->
+                    // (*** 1. 新增: 动画 ***)
+                    val scale by animateFloatAsState(
+                        targetValue = if (selectedScore == index) 1.25f else 1.0f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                        label = "MoodEmojiScale"
+                    )
+
                     Text(
                         text = emoji,
                         fontSize = 32.sp,
                         modifier = Modifier
+                            .scale(scale) // (*** 2. 应用动画 ***)
                             .clip(CircleShape)
-                            .clickable { onScoreSelect(index) } // L12: (状态提升)
+                            .clickable { onScoreSelect(index) }
                             .background(
                                 if (selectedScore == index) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                 else Color.Transparent
@@ -64,7 +84,7 @@ fun MoodSelector(
 @Composable
 fun TomorrowPlanInput(
     texts: List<String>,
-    onTextsChange: (List<String>) -> Unit // (修复 KSP Bug)
+    onTextsChange: (List<String>) -> Unit
 ) {
     Card(
         elevation = CardDefaults.cardElevation(0.dp),
@@ -73,7 +93,6 @@ fun TomorrowPlanInput(
         Column(Modifier.padding(16.dp)) {
             Text("明日计划", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            // (新) U7 & L9: 重用 TextEntryList
             TextEntryList(
                 texts = texts,
                 onTextsChange = onTextsChange,
@@ -88,11 +107,12 @@ fun TomorrowPlanInput(
 fun DynamicLogCard(
     logType: LogType,
     logData: com.example.easydiary.ui.EntryScreenState.LogData,
-    onTextsChange: (List<String>) -> Unit, // (状态提升)
-    onDurationChange: (Float) -> Unit // (状态提升)
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onTextsChange: (List<String>) -> Unit,
+    onDurationChange: (Float) -> Unit,
+    onMediaPathChange: (String?) -> Unit // (*** 3. 新增: 媒体路径回调 ***)
 ) {
-    var isExpanded by remember { mutableStateOf(true) }
-
     Card(
         elevation = CardDefaults.cardElevation(0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -101,26 +121,30 @@ fun DynamicLogCard(
             Text(
                 text = logType.name,
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded }
+                modifier = Modifier.fillMaxWidth().clickable { onToggleExpand() }
             )
 
             if (isExpanded) {
                 Spacer(Modifier.height(16.dp))
                 if (logType.hasText) {
-                    TextEntryList( // L9
+                    TextEntryList(
                         texts = logData.texts,
                         onTextsChange = onTextsChange,
                         placeholder = "记录点什么..."
                     )
                 }
                 if (logType.hasDuration) {
-                    DurationSlider( // L10
+                    DurationSlider(
                         duration = logData.duration,
                         onDurationChange = onDurationChange
                     )
                 }
                 if (logType.hasMedia) {
-                    MediaButton() // L11
+                    // (*** 4. 修改: 使用新的 MediaPicker ***)
+                    MediaPicker(
+                        mediaPath = logData.mediaPath,
+                        onMediaPathChange = onMediaPathChange
+                    )
                 }
             }
         }
@@ -131,13 +155,11 @@ fun DynamicLogCard(
 @Composable
 fun TextEntryList(
     texts: List<String>,
-    onTextsChange: (List<String>) -> Unit, // (状态提升)
+    onTextsChange: (List<String>) -> Unit,
     placeholder: String
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 已有的条目
         texts.forEachIndexed { index, text ->
-            // 只有最后一条是输入框，前面的都是可编辑的文本
             if (index < texts.lastIndex) {
                 OutlinedTextField(
                     value = text,
@@ -151,8 +173,6 @@ fun TextEntryList(
                 )
             }
         }
-
-        // 最后一个条目，作为“当前”输入框
         OutlinedTextField(
             value = texts.last(),
             onValueChange = { newText ->
@@ -162,19 +182,19 @@ fun TextEntryList(
             },
             placeholder = { Text(placeholder) },
             modifier = Modifier.fillMaxWidth(),
+            // (*** 这里是修正点 ***)
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
-                // (新) L9: 回车 (Done) 保存
                 val currentText = texts.last()
                 if (currentText.isNotBlank()) {
-                    onTextsChange(texts + "") // 添加一个 "" 作为新的输入框
+                    onTextsChange(texts + "")
                 }
             }),
             trailingIcon = {
                 IconButton(onClick = {
                     val currentText = texts.last()
                     if (currentText.isNotBlank()) {
-                        onTextsChange(texts + "") // L9: "加号" 按钮
+                        onTextsChange(texts + "")
                     }
                 }) {
                     Icon(Icons.Default.Add, "添加条目")
@@ -188,7 +208,7 @@ fun TextEntryList(
 @Composable
 fun DurationSlider(
     duration: Float,
-    onDurationChange: (Float) -> Unit // (状态提升)
+    onDurationChange: (Float) -> Unit
 ) {
     Column(Modifier.padding(top = 8.dp)) {
         Text("时长: ${"%.1f".format(duration)} 小时", style = MaterialTheme.typography.bodyMedium)
@@ -201,14 +221,58 @@ fun DurationSlider(
     }
 }
 
-// L11: 添加图片/视频 (暂时不变)
+// (*** 5. 新增: MediaPicker Composable ***)
 @Composable
-fun MediaButton() {
-    Button(
-        onClick = { /* TODO: L11 - 访问手机相册 */ },
-        modifier = Modifier.padding(top = 8.dp)
-    ) {
-        Icon(Icons.Default.AddAPhoto, "添加媒体", modifier = Modifier.padding(end = 8.dp))
-        Text("添加图片/视频")
+fun MediaPicker(
+    mediaPath: String?,
+    onMediaPathChange: (String?) -> Unit
+) {
+    val context = LocalContext.current
+
+    // 1. 准备图片选择器
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        // L11: 暂时只保存 URI 字符串
+        onMediaPathChange(uri?.toString())
+    }
+
+    Column(Modifier.padding(top = 8.dp)) {
+        if (mediaPath == null) {
+            // 2. 如果没有图片，显示添加按钮
+            Button(
+                onClick = {
+                    launcher.launch("image/*")
+                }
+            ) {
+                Icon(Icons.Default.AddAPhoto, "添加媒体", modifier = Modifier.padding(end = 8.dp))
+                Text("添加图片")
+            }
+        } else {
+            // 3. 如果有图片，显示预览和移除按钮
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
+                AsyncImage(
+                    model = mediaPath,
+                    contentDescription = "选择的图片",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                IconButton(
+                    onClick = { onMediaPathChange(null) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Close, "移除图片", tint = Color.White)
+                }
+            }
+        }
     }
 }

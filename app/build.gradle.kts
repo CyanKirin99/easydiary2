@@ -18,6 +18,7 @@ android {
 
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -32,6 +33,7 @@ android {
 
     // 启用 Compose
     buildFeatures {
+
         compose = true
     }
 
@@ -53,7 +55,8 @@ android {
 dependencies {
 
     // 统一版本号
-    val roomVersion = "2.6.1"
+    val roomVersion =
+        "2.6.1"
     val navVersion = "2.7.5"
 
     val composeBomVersion = "2024.05.00"
@@ -79,6 +82,7 @@ dependencies {
     // --- Room 数据库 ---
     implementation("androidx.room:room-runtime:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
+
     implementation("androidx.room:room-ktx:$roomVersion")
 
     // --- Compose Navigation ---
@@ -87,8 +91,10 @@ dependencies {
     // --- DataStore (L14/L19) ---
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // (*** 修复: 删除了失败的日历库 ***)
-    // implementation("com.github.kizitonwose:Calendar:2.5.1")
+    // (*** 1. Coil (用于异步加载图片) ***)
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // (*** 2. 移除: Vico 和 YCharts ***)
 
     // (测试依赖...)
 }
