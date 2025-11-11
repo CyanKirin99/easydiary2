@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-// (*** 1. 修正: 导入 stateIn ***)
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
@@ -35,17 +34,17 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.time.LocalDate
+import java.util.regex.Pattern
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-// V2 主 UiState
+// (UiStates 保持不变)
 data class DiaryUiState(
     val selectedDate: LocalDate = LocalDate.now(),
     val logTypes: List<LogType> = emptyList()
 )
 
-// V2 EntryScreen 的状态
 data class EntryScreenState(
     val moodScore: Int = 2,
     val tomorrowPlans: List<String> = listOf(""),
@@ -63,6 +62,9 @@ class DiaryViewModel(
     private val repository: DiaryRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    // (... 1. 到 8. 的所有 Flow 和函数保持不变 ...)
+    // ... (onMoodChange, saveEntry, deleteEntry, updateLogTypes, etc.) ...
 
     // --- 1. 全局 UI 状态 ---
     private val _uiState = MutableStateFlow(DiaryUiState())
@@ -263,19 +265,22 @@ class DiaryViewModel(
         }
     }
 
-    // --- (*** 9. 新增: 导入/导出 (Import/Export) 逻辑 ***) ---
+    // --- (*** 9. 导入/导出 (Import/Export) 逻辑 ***) ---
 
-    // 帮助函数：转义 CSV
     private fun csvEscape(data: String?): String {
         if (data == null) return ""
         val escaped = data.replace("\"", "\"\"")
-        return if (escaped.contains(",")) "\"$escaped\"" else escaped
+        return if (escaped.contains(",") || escaped.contains("\n")) {
+            "\"$escaped\""
+        } else {
+            escaped
+        }
     }
     private fun csvEscape(data: Any?): String {
         return csvEscape(data?.toString())
     }
 
-    // 导出辅助
+    // --- 导出 (备份 .zip) 辅助 ---
     private fun entriesToCsv(entries: List<DiaryEntry>): String {
         val sb = StringBuilder("date,moodScore,tomorrowPlan\n")
         entries.forEach {
@@ -308,33 +313,41 @@ class DiaryViewModel(
         return sb.toString()
     }
 
-    // 导入辅助 (CSV 解析)
+    // --- 导入 (备份 .zip) 辅助 ---
+
+    private val csvRegex = ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex()
+
+    private fun String.removeCsvQuotes(): String {
+        return this.removeSurrounding("\"").replace("\"\"", "\"")
+    }
+
     private fun parseEntriesCsv(content: String): List<DiaryEntry> {
         return content.lines().drop(1).filter { it.isNotBlank() }.map { line ->
-            val parts = line.split(",", limit = 3) // OK (3 components)
+            val parts = line.split(csvRegex, limit = 3)
             DiaryEntry(
-                date = parts[0],
-                moodScore = parts[1].toInt(),
-                tomorrowPlan = if (parts[2] == "null") null else parts[2].removeSurrounding("\"")
+                date = parts[0].removeCsvQuotes(),
+                moodScore = parts[1].trim().toInt(),
+                tomorrowPlan = if (parts[2].trim() == "null") null else parts[2].removeCsvQuotes()
             )
         }
     }
     private fun parseLogTypesCsv(content: String): List<LogType> {
         return content.lines().drop(1).filter { it.isNotBlank() }.map { line ->
-            // (*** 2. 修正: 移除解构，使用索引 ***)
-            val parts = line.split(",", limit = 6)
+            val parts = line.split(csvRegex, limit = 6)
             LogType(
-                id = parts[0].toLong(),
-                name = parts[1].removeSurrounding("\""),
-                order = parts[2].toInt(),
-                hasText = parts[3].toBoolean(),
-                hasDuration = parts[4].toBoolean(),
-                hasMedia = parts[5].toBoolean()
+                id = parts[0].trim().toLong(),
+                name = parts[1].removeCsvQuotes(),
+                order = parts[2].trim().toInt(),
+                hasText = parts[3].trim().toBoolean(),
+                hasDuration = parts[4].trim().toBoolean(),
+                hasMedia = parts[5].trim().toBoolean()
             )
         }
     }
 
+    // (原) 导出 .zip (用于备份)
     suspend fun exportDataToZip(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        // (此函数保持不变)
         try {
             val data = repository.getExportData()
 
@@ -345,7 +358,6 @@ class DiaryViewModel(
 
             context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                 ZipOutputStream(outputStream).use { zipStream ->
-
                     zipStream.putNextEntry(ZipEntry("diary_entries.csv"))
                     zipStream.write(csvEntries.toByteArray())
                     zipStream.closeEntry()
@@ -370,7 +382,8 @@ class DiaryViewModel(
         }
     }
 
-    suspend fun importDataFromZip(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+    // [修改点] 修复 importDataFromZip 的 "Stream closed" Bug
+    suspend fun importDataFromZip(context: Context, uri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val csvMap = mutableMapOf<String, String>()
 
@@ -378,7 +391,12 @@ class DiaryViewModel(
                 ZipInputStream(inputStream).use { zipStream ->
                     var entry = zipStream.nextEntry
                     while (entry != null) {
-                        val content = zipStream.bufferedReader().use(BufferedReader::readText)
+
+                        // [BUG 修复]
+                        // 移除 .use { } 块，防止 zipStream 被提前关闭
+                        val content = zipStream.bufferedReader().readText()
+                        // [修复结束]
+
                         csvMap[entry.name] = content
                         entry = zipStream.nextEntry
                     }
@@ -389,28 +407,107 @@ class DiaryViewModel(
             val logTypes = parseLogTypesCsv(csvMap["log_types.csv"] ?: "")
 
             val logItems = csvMap["log_items.csv"]?.lines()?.drop(1)?.filter { it.isNotBlank() }?.map {
-                val parts = it.split(",", limit = 5) // OK (5 components)
-                LogItem(parts[0].toLong(), parts[1], parts[2].toLong(), if(parts[3] == "null") null else parts[3].toFloat(), if(parts[4] == "null") null else parts[4].removeSurrounding("\""))
+                val parts = it.split(csvRegex, limit = 5)
+                LogItem(
+                    parts[0].trim().toLong(),
+                    parts[1].removeCsvQuotes(),
+                    parts[2].trim().toLong(),
+                    if(parts[3].trim() == "null") null else parts[3].trim().toFloat(),
+                    if(parts[4].trim() == "null") null else parts[4].removeCsvQuotes().trim()
+                )
             } ?: emptyList()
 
             val textEntries = csvMap["text_entries.csv"]?.lines()?.drop(1)?.filter { it.isNotBlank() }?.map {
-                val parts = it.split(",", limit = 4) // OK (4 components)
-                TextEntry(parts[0].toLong(), parts[1].toLong(), parts[2].removeSurrounding("\""), parts[3].toInt())
+                val parts = it.split(csvRegex, limit = 4)
+                TextEntry(
+                    parts[0].trim().toLong(),
+                    parts[1].trim().toLong(),
+                    parts[2].removeCsvQuotes(),
+                    parts[3].trim().toInt()
+                )
             } ?: emptyList()
 
             if (entries.isEmpty() || logTypes.isEmpty()) {
-                return@withContext false
+                return@withContext Result.failure(Exception("文件为空或 'diary_entries.csv' / 'log_types.csv' 缺失"))
             }
 
             repository.importData(ExportData(entries, logTypes, logItems, textEntries))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+    // --- [修复结束] ---
+
+
+    // (导出为CSV的可读文件)
+    suspend fun exportHumanReadableCsv(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        // (此函数保持不变)
+        try {
+            val data = repository.getExportData()
+            val (entries, logTypes, logItems, textEntries) = data
+
+            val sortedLogTypes = logTypes.sortedBy { it.order }
+            val logItemsMap = logItems.groupBy { it.diaryDate }
+            val textEntriesMap = textEntries.groupBy { it.logItemId }
+            val sortedEntries = entries.sortedBy { it.date }
+
+            val sb = StringBuilder()
+
+            val headers = mutableListOf("日期", "心情", "明日计划")
+            for (logType in sortedLogTypes) {
+                if (logType.hasText) headers.add("${logType.name}-记录")
+                if (logType.hasDuration) headers.add("${logType.name}-时长")
+                if (logType.hasMedia) headers.add("${logType.name}-媒体")
+            }
+            sb.appendLine(headers.joinToString(",") { csvEscape(it) })
+
+            for (entry in sortedEntries) {
+                val row = mutableListOf<String>()
+
+                row.add(csvEscape(entry.date))
+                row.add(csvEscape(entry.moodScore + 1))
+                row.add(csvEscape(entry.tomorrowPlan))
+
+                val dailyLogItems = logItemsMap[entry.date] ?: emptyList()
+
+                for (logType in sortedLogTypes) {
+                    val item = dailyLogItems.find { it.logTypeId == logType.id }
+
+                    if (logType.hasText) {
+                        val texts = (textEntriesMap[item?.id] ?: emptyList()).sortedBy { it.order }
+                        val textContent = texts.joinToString("\n") { it.content }
+                        row.add(csvEscape(textContent))
+                    }
+                    if (logType.hasDuration) {
+                        val duration = item?.duration?.let { if (it > 0f) it.toString() else "" } ?: ""
+                        row.add(csvEscape(duration))
+                    }
+                    if (logType.hasMedia) {
+                        val media = item?.mediaPath ?: ""
+                        row.add(csvEscape(media))
+                    }
+                }
+
+                sb.appendLine(row.joinToString(","))
+            }
+
+            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                OutputStreamWriter(outputStream, Charsets.UTF_8).use { writer ->
+                    writer.write("\uFEFF")
+                    writer.write(sb.toString())
+                }
+            }
             true
         } catch (e: Exception) {
             e.printStackTrace()
             false
         }
     }
-
 }
+// --- 结束 ---
+
 
 // (Factory 保持不变)
 class DiaryViewModelFactory(

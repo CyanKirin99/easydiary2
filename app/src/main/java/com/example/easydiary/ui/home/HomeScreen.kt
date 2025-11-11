@@ -53,17 +53,32 @@ fun HomeScreen(
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
+    // [修改点 1.1] 引入 totalDrag 状态
+    var totalDrag by remember { mutableStateOf(0f) }
+
     Column(
         Modifier
             .fillMaxSize()
             .pointerInput(Unit) { // L4: 滑动手势 (来自 V1)
-                detectHorizontalDragGestures { change, dragAmount ->
-                    change.consume()
-                    when {
-                        dragAmount < -50 -> currentMonth = currentMonth.plusMonths(1)
-                        dragAmount > 50 -> currentMonth = currentMonth.minusMonths(1)
+                // [修改点 1.2] 使用 onDragStart 和 onDragEnd
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDrag = 0f }, // 重置
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        totalDrag += dragAmount // 累加
+                    },
+                    onDragEnd = {
+                        val swipeThreshold = 100 // 滑动阈值
+                        when {
+                            totalDrag < -swipeThreshold -> { // 向左滑动
+                                currentMonth = currentMonth.plusMonths(1)
+                            }
+                            totalDrag > swipeThreshold -> { // 向右滑动
+                                currentMonth = currentMonth.minusMonths(1)
+                            }
+                        }
                     }
-                }
+                )
             }
     ) {
         // --- 1. 顶部标头 (L4) ---
@@ -182,7 +197,7 @@ fun CalendarGrid(
     ) {
         items(calendarDays) { date ->
             if (date == null) {
-                Box(Modifier.padding(4.dp).aspectRatio(1f)) // 空白格
+                Box(Modifier.padding(4.dp).aspectRatio(0.75f)) // 空白格 (匹配 DayCell 宽高比)
             } else {
                 DayCell(
                     date = date,

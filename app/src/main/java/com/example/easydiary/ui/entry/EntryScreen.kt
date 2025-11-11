@@ -1,6 +1,8 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/entry/EntryScreen.kt
 package com.example.easydiary.ui.entry
 
+// [修改点 1] 导入 BackHandler
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,12 +24,9 @@ import com.example.easydiary.ui.DiaryViewModel
 import com.example.easydiary.ui.EntryScreenState
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-// (*** 1. 新增: 导入 Coil ***)
 import coil.compose.AsyncImage
-// (*** 2. 新增: 导入 clip 和 Shape ***)
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
-// (*** 3. 新增: 导入 ContentScale ***)
 import androidx.compose.ui.layout.ContentScale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,7 +35,7 @@ fun EntryScreen(
     viewModel: DiaryViewModel,
     selectedDate: LocalDate,
     onBack: () -> Unit,
-    onDateChange: (LocalDate) -> Unit // (*** 1. 新增: 日期切换回调 ***)
+    onDateChange: (LocalDate) -> Unit
 ) {
     val diaryDetails by viewModel.getDiaryForDate(selectedDate.toString())
         .collectAsState(initial = null)
@@ -45,8 +44,8 @@ fun EntryScreen(
 
     val entryState by viewModel.entryState.collectAsState()
 
-    var isEditing by remember(diaryDetails) {
-        mutableStateOf(diaryDetails == null)
+    var isEditing by remember(selectedDate) {
+        mutableStateOf(false)
     }
 
     LaunchedEffect(isEditing, diaryDetails, logTypes) {
@@ -57,17 +56,21 @@ fun EntryScreen(
 
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // (*** 2. 新增: 左右滑动的手势检测 ***)
     var totalDrag by remember { mutableStateOf(0f) }
 
+    // [修改点 2] 拦截系统返回键
+    // 当处于编辑模式 (isEditing = true) 时，系统返回键将只会设置 isEditing = false
+    BackHandler(enabled = isEditing) {
+        isEditing = false
+    }
+
     Scaffold(
-        modifier = Modifier.pointerInput(isEditing, selectedDate) { // (*** 3. 监听isEditing和selectedDate ***)
+        modifier = Modifier.pointerInput(isEditing, selectedDate) {
             if (isEditing) return@pointerInput // 仅在查看模式下启用
 
             detectHorizontalDragGestures(
                 onDragStart = { totalDrag = 0f },
                 onHorizontalDrag = { change, dragAmount ->
-                    // 仅水平滑动时，消耗事件，防止 LazyColumn 滚动
                     if (kotlin.math.abs(dragAmount) > kotlin.math.abs(change.previousPosition.y - change.position.y)) {
                         change.consume()
                     }
@@ -90,7 +93,14 @@ fun EntryScreen(
             TopAppBar(
                 title = { Text(selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    // [修改点 3] 修改顶部返回箭头的逻辑
+                    IconButton(onClick = {
+                        if (isEditing) {
+                            isEditing = false // 从编辑模式退回查看模式
+                        } else {
+                            onBack() // 从查看模式退回主页
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
                     }
                 },
@@ -103,10 +113,15 @@ fun EntryScreen(
                             Icon(Icons.Default.Check, "保存")
                         }
                     } else {
-                        IconButton(onClick = { showDeleteDialog = true }) {
+                        IconButton(
+                            onClick = { showDeleteDialog = true },
+                            enabled = diaryDetails != null // (Bug 修复)
+                        ) {
                             Icon(Icons.Default.Delete, "删除")
                         }
-                        IconButton(onClick = { isEditing = true }) {
+                        IconButton(
+                            onClick = { isEditing = true } // (Bug 修复)
+                        ) {
                             Icon(Icons.Default.Edit, "编辑")
                         }
                     }
@@ -146,7 +161,8 @@ fun EntryScreen(
             ViewModeContent(
                 modifier = Modifier.padding(paddingValues),
                 diaryDetails = diaryDetails,
-                logTypes = logTypes
+                logTypes = logTypes,
+                onStartEdit = { isEditing = true }
             )
         }
     }
@@ -175,7 +191,6 @@ fun EditModeContent(
                 onToggleExpand = { viewModel.onLogCardToggled(logType.id) },
                 onTextsChange = { viewModel.onLogTextsChange(logType.id, it) },
                 onDurationChange = { viewModel.onLogDurationChange(logType.id, it) },
-                // (*** 4. 新增: 传递媒体事件 ***)
                 onMediaPathChange = { path -> viewModel.onMediaPathChange(logType.id, path) }
             )
         }
@@ -201,15 +216,28 @@ fun EditModeContent(
 fun ViewModeContent(
     modifier: Modifier = Modifier,
     diaryDetails: DiaryEntryWithDetails?,
-    logTypes: List<LogType>
+    logTypes: List<LogType>,
+    onStartEdit: () -> Unit
 ) {
     if (diaryDetails == null || diaryDetails.entry == null) {
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                "今天没有记录。",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.secondary
-            )
+        Box(
+            modifier = modifier.fillMaxSize().padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "今天没有记录。",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Button(onClick = onStartEdit) {
+                    Icon(Icons.Default.Edit, "Edit", modifier = Modifier.padding(end = 8.dp))
+                    Text("开始编辑")
+                }
+            }
         }
         return
     }
@@ -264,15 +292,13 @@ fun ViewLogCard(
     logItem: com.example.easydiary.data.model.LogItemWithTexts,
     logType: LogType?
 ) {
-    // (*** 修复: 使用 logType.name ***)
     val title = logType?.name ?: "记录 (ID: ${logItem.logItem.logTypeId})"
     val texts = logItem.texts.map { it.content }
     val duration = logItem.logItem.duration
-    val mediaPath = logItem.logItem.mediaPath // (*** 新增: 显示媒体 ***)
+    val mediaPath = logItem.logItem.mediaPath
 
     ViewTextCard(title = title, texts = texts)
 
-    // (*** 新增: 显示图片 ***)
     if (mediaPath != null) {
         AsyncImage(
             model = mediaPath,
@@ -298,7 +324,6 @@ fun ViewLogCard(
 
 @Composable
 fun ViewTextCard(title: String, texts: List<String>) {
-    // (*** 修改: 即使 texts 为空，如果 title 是“明日计划”等，也应显示卡片框架 ***)
     if (texts.isEmpty() && title != "明日计划") return
 
     Card(

@@ -7,7 +7,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Image // (*** 1. 导入: Info ***)
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,7 +28,7 @@ fun LogTypeSettingsScreen(
 ) {
     // 1. (*** 修复: 正确收集状态 ***)
     val uiState by viewModel.uiState.collectAsState()
-    val logTypes = uiState.logTypes
+    val logTypes = uiState.logTypes // 这是“原始”列表
 
     // 2. L15: 创建本地临时状态
     var localTypes by remember(logTypes) {
@@ -45,6 +46,35 @@ fun LogTypeSettingsScreen(
         localTypes.none { it.name.isBlank() } // 确保没有空名称
     }
 
+    // --- [修改点 1] 新增弹窗状态 ---
+    var showConfirmDialog by remember { mutableStateOf(false) }
+    var confirmDialogText by remember { mutableStateOf("") }
+    // --- 结束 ---
+
+    // --- [修改点 2] 弹窗 Composable ---
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            icon = { Icon(Icons.Default.Info, "Warning") },
+            title = { Text("确认重命名？") },
+            text = { Text(confirmDialogText) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        // 确认后，执行真正的保存
+                        viewModel.updateLogTypes(localTypes)
+                        showConfirmDialog = false
+                        onBack()
+                    }
+                ) { Text("确认重命名") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) { Text("取消") }
+            }
+        )
+    }
+    // --- 结束 ---
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -58,8 +88,32 @@ fun LogTypeSettingsScreen(
                     // L15: 保存按钮
                     IconButton(
                         onClick = {
-                            viewModel.updateLogTypes(localTypes)
-                            onBack()
+                            // --- [修改点 3] 保存逻辑 ---
+                            // 1. 找出所有名称发生变化的条目
+                            val nameChanges = localTypes.mapNotNull { local ->
+                                val original = logTypes.find { it.id == local.id }
+                                // 检查原始名称和本地修改后的名称是否不同
+                                if (original != null && original.name != local.name) {
+                                    // 返回一个描述变化的字符串
+                                    "• 将 '${original.name}' 重命名为 '${local.name}'"
+                                } else {
+                                    null // 名称未变
+                                }
+                            }
+
+                            // 2. 根据是否有名称变化来决定行为
+                            if (nameChanges.isEmpty()) {
+                                // 2a. 没有名称变化 (比如只改了 "启用时长")，直接保存并返回
+                                viewModel.updateLogTypes(localTypes)
+                                onBack()
+                            } else {
+                                // 2b. 有名称变化，构建警告文本并显示弹窗
+                                confirmDialogText = "您确认要进行以下重命名吗？\n\n" +
+                                        nameChanges.joinToString("\n") +
+                                        "\n\n此操作将更新所有使用这些类型的历史记录，无法撤销。"
+                                showConfirmDialog = true
+                            }
+                            // --- 结束 ---
                         },
                         enabled = isSaveEnabled // (*** 2. 设置可用性 ***)
                     ) {
@@ -93,7 +147,7 @@ fun LogTypeSettingsScreen(
     }
 }
 
-// L15: 单个卡片的编辑器
+// L15: 单个卡片的编辑器 (保持不变)
 @Composable
 private fun LogTypeEditor(
     logType: LogType,

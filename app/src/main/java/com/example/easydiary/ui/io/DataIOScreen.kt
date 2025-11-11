@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Upload
@@ -41,18 +42,22 @@ fun DataIOScreen(
     var showImportConfirm by remember { mutableStateOf(false) }
     var importUriToProcess by remember { mutableStateOf<android.net.Uri?>(null) }
 
-    // 1. 导出启动器 (创建文件)
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/zip"),
+    // [修改点 1] 新增：用于显示导入结果的弹窗状态
+    var importResultDialogMessage by remember { mutableStateOf<String?>(null) }
+
+
+    // (导出 CSV 启动器 保持不变)
+    val exportCsvLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/csv"),
         onResult = { uri ->
             if (uri != null) {
                 isLoading = true
                 scope.launch {
-                    val success = viewModel.exportDataToZip(context, uri)
+                    val success = viewModel.exportHumanReadableCsv(context, uri)
                     if (success) {
-                        showToast(context, "导出成功")
+                        showToast(context, "导出CSV成功")
                     } else {
-                        showToast(context, "导出失败")
+                        showToast(context, "导出CSV失败")
                     }
                     isLoading = false
                 }
@@ -60,19 +65,37 @@ fun DataIOScreen(
         }
     )
 
-    // 2. 导入启动器 (选择文件)
+    // (导出 .zip 启动器 保持不变)
+    val exportZipLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
+        onResult = { uri ->
+            if (uri != null) {
+                isLoading = true
+                scope.launch {
+                    val success = viewModel.exportDataToZip(context, uri)
+                    if (success) {
+                        showToast(context, "创建备份成功")
+                    } else {
+                        showToast(context, "创建备份失败")
+                    }
+                    isLoading = false
+                }
+            }
+        }
+    )
+
+    // (导入 .zip 启动器 保持不变)
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri ->
             if (uri != null) {
-                // 确认导入，因为会覆盖数据
                 importUriToProcess = uri
                 showImportConfirm = true
             }
         }
     )
 
-    // 3. 导入确认弹窗
+    // (原) 导入确认弹窗
     if (showImportConfirm && importUriToProcess != null) {
         AlertDialog(
             onDismissRequest = {
@@ -80,7 +103,7 @@ fun DataIOScreen(
                 importUriToProcess = null
             },
             icon = { Icon(Icons.Default.Info, "Warning") },
-            title = { Text("确认导入数据") },
+            title = { Text("确认导入备份") },
             text = { Text("导入备份将覆盖所有当前数据，此操作无法撤销。您确定要继续吗？") },
             confirmButton = {
                 TextButton(
@@ -88,14 +111,22 @@ fun DataIOScreen(
                         isLoading = true
                         showImportConfirm = false
                         scope.launch {
-                            val success = viewModel.importDataFromZip(context, importUriToProcess!!)
-                            if (success) {
-                                showToast(context, "导入成功")
-                            } else {
-                                showToast(context, "导入失败，文件可能已损坏")
-                            }
+                            // [修改点 2] 调用新的返回 Result 的函数
+                            val result = viewModel.importDataFromZip(context, importUriToProcess!!)
                             isLoading = false
                             importUriToProcess = null
+
+                            // [修改点 3] 检查 Result.fold
+                            result.fold(
+                                onSuccess = {
+                                    // 成功时，设置成功消息
+                                    importResultDialogMessage = "导入成功！"
+                                },
+                                onFailure = { error ->
+                                    // 失败时，设置详细的错误消息
+                                    importResultDialogMessage = "导入失败：\n\n${error.javaClass.simpleName}:\n${error.message ?: "未知错误"}\n\n请检查CSV文件格式是否正确。"
+                                }
+                            )
                         }
                     }
                 ) { Text("确认导入") }
@@ -108,6 +139,21 @@ fun DataIOScreen(
             }
         )
     }
+
+    // [修改点 4] 新增：用于显示导入结果（成功或失败）的弹窗
+    if (importResultDialogMessage != null) {
+        AlertDialog(
+            onDismissRequest = { importResultDialogMessage = null },
+            title = { Text(if (importResultDialogMessage!!.startsWith("导入成功")) "导入完成" else "导入错误") },
+            text = { Text(importResultDialogMessage!!) },
+            confirmButton = {
+                TextButton(onClick = { importResultDialogMessage = null }) {
+                    Text("好的")
+                }
+            }
+        )
+    }
+
 
     Scaffold(
         topBar = {
@@ -126,42 +172,79 @@ fun DataIOScreen(
                 .padding(paddingValues)
                 .fillMaxSize()
                 .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
 
             if (isLoading) {
-                CircularProgressIndicator()
-                Text("正在处理...")
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator()
+                    Text("正在处理...")
+                }
             } else {
-                // 导出按钮
+
+                // (导出CSV 按钮 保持不变)
+                Button(
+                    onClick = {
+                        val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+                        val fileName = "easydiary_export_${LocalDateTime.now().format(formatter)}.csv"
+                        exportCsvLauncher.launch(fileName)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.TextSnippet, "Export CSV", modifier = Modifier.padding(end = 8.dp))
+                    Text("导出为CSV (可读文件)")
+                }
+                Text(
+                    "将所有日记导出为单个CSV表格文件，可在Excel或表格应用中查看。",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
+                )
+
+                // (创建备份 按钮 保持不变)
                 Button(
                     onClick = {
                         val formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
                         val fileName = "easydiary_backup_${LocalDateTime.now().format(formatter)}.zip"
-                        exportLauncher.launch(fileName)
+                        exportZipLauncher.launch(fileName)
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
-                    Icon(Icons.Default.Upload, "Export", modifier = Modifier.padding(end = 8.dp))
-                    Text("导出备份")
+                    Icon(Icons.Default.Upload, "Export Zip", modifier = Modifier.padding(end = 8.dp))
+                    Text("创建备份 (.zip)")
                 }
+                Text(
+                    "用于本机恢复或迁移到新手机，可被‘导入备份’功能读取。",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
+                )
 
-                // 导入按钮
+                // (导入备份 按钮 保持不变)
                 Button(
                     onClick = { importLauncher.launch("application/zip") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
-                    Icon(Icons.Default.Download, "Import", modifier = Modifier.padding(end = 8.dp))
-                    Text("导入备份")
+                    Icon(Icons.Default.Download, "Import Zip", modifier = Modifier.padding(end = 8.dp))
+                    Text("导入备份 (.zip)")
                 }
-
-                Spacer(Modifier.height(16.dp))
-
-                // 模板说明 (Logic#18)
-                Text("模板说明", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "导入/导出功能使用 .zip 压缩包格式，内部包含 4 个 CSV 文件：" +
+                    "从 .zip 备份文件恢复数据，将覆盖所有现有数据。",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+
+                Spacer(Modifier.height(32.dp))
+
+                // (模板说明 保持不变)
+                Text("备份文件说明 (Logic#18)", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    ".zip 压缩包格式，内部包含 4 个 CSV 文件：" +
                             "\n1. diary_entries.csv" +
                             "\n2. log_types.csv" +
                             "\n3. log_items.csv" +
