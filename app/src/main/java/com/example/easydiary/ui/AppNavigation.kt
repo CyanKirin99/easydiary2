@@ -2,11 +2,17 @@
 package com.example.easydiary.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
@@ -15,6 +21,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination
@@ -26,7 +34,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.easydiary.ui.entry.EntryScreen
 import com.example.easydiary.ui.home.HomeScreen
-// (*** 1. 新增: 导入新屏幕 ***)
 import com.example.easydiary.ui.io.DataIOScreen
 import com.example.easydiary.ui.settings.LogTypeSettingsScreen
 import com.example.easydiary.ui.settings.SettingsScreen
@@ -35,7 +42,7 @@ import com.example.easydiary.ui.settings.ViewSettingsScreen
 import com.example.easydiary.ui.statistics.StatisticsScreen
 import java.time.LocalDate
 
-// V2 导航路由
+// (路由定义保持不变)
 sealed class Screen(val route: String, val label: String? = null, val icon: ImageVector? = null) {
     object Home : Screen("home", "主页", Icons.Default.Home)
     object Settings : Screen("settings", "我的", Icons.Default.Person)
@@ -47,7 +54,6 @@ sealed class Screen(val route: String, val label: String? = null, val icon: Imag
     object ThemeSettings : Screen("theme_settings")
     object ViewSettings : Screen("view_settings")
     object Statistics : Screen("statistics")
-    // (*** 2. 新增: 导入/导出路由 ***)
     object DataIO : Screen("data_io")
 }
 
@@ -91,10 +97,16 @@ fun AppNavigation(
             if (isMainScreen) {
                 AppBottomBar(
                     navController = navController,
-                    currentDestination = currentDestination
+                    currentDestination = currentDestination,
+                    // [修改点 1] 传递“添加”按钮的点击事件
+                    onAddClick = {
+                        navController.navigate(Screen.Add.createRoute(LocalDate.now()))
+                    }
                 )
             }
-        },
+        }
+        // [修改点 2] 移除 floatingActionButton 和 floatingActionButtonPosition
+        /*
         floatingActionButton = {
             if (isMainScreen) {
                 FloatingActionButton(
@@ -109,12 +121,15 @@ fun AppNavigation(
             }
         },
         floatingActionButtonPosition = FabPosition.Center
+        */
     ) { paddingValues ->
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
             modifier = Modifier.padding(paddingValues)
         ) {
+
+            // (NavHost composable 路由保持不变)
 
             composable(Screen.Home.route) {
                 HomeScreen(
@@ -176,7 +191,6 @@ fun AppNavigation(
                 )
             }
 
-            // (*** 3. 新增: 导入/导出屏幕 ***)
             composable(Screen.DataIO.route) {
                 DataIOScreen(
                     viewModel = viewModel,
@@ -187,26 +201,53 @@ fun AppNavigation(
     }
 }
 
-// ... (AppBottomBar, CustomNavItem, isRoute functions 保持不变) ...
-
+// [修改点 3] 重写 AppBottomBar
 @Composable
 fun AppBottomBar(
     navController: NavHostController,
-    currentDestination: NavDestination?
+    currentDestination: NavDestination?,
+    onAddClick: () -> Unit // 接收点击事件
 ) {
-    NavigationBar {
+    NavigationBar(
+        // (可选) 确保导航栏有足够的高度容纳按钮
+        modifier = Modifier.height(80.dp)
+    ) {
+        // 1. 主页 (权重 1)
         CustomNavItem(
+            modifier = Modifier.weight(1f), // [修改点 4] 添加权重
             screen = Screen.Home,
             currentDestination = currentDestination,
             onClick = { navController.navigate(Screen.Home.route) }
         )
-        NavigationBarItem(
-            selected = false,
-            onClick = { /* Do Nothing */ },
-            icon = { /* Empty */ },
-            enabled = false
-        )
+
+        // 2. 自定义“添加”按钮 (权重 1)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .clickable(onClick = onAddClick),
+            contentAlignment = Alignment.Center
+        ) {
+            // 模拟 FAB 的外观
+            Box(
+                modifier = Modifier
+                    .size(56.dp) // 标准 FAB 尺寸
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    "添加",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(36.dp) // 原始图标大小
+                )
+            }
+        }
+
+        // 3. 我的 (权重 1)
         CustomNavItem(
+            modifier = Modifier.weight(1f), // [修改点 5] 添加权重
             screen = Screen.Settings,
             currentDestination = currentDestination,
             onClick = { navController.navigate(Screen.Settings.route) }
@@ -214,13 +255,16 @@ fun AppBottomBar(
     }
 }
 
+// [修改点 6] CustomNavItem 接受 Modifier
 @Composable
 fun RowScope.CustomNavItem(
     screen: Screen,
     currentDestination: NavDestination?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier // 添加 Modifier 参数
 ) {
     NavigationBarItem(
+        modifier = modifier, // 应用 Modifier
         selected = currentDestination.isRoute(screen.route),
         onClick = onClick,
         icon = { Icon(screen.icon!!, contentDescription = screen.label) },

@@ -60,6 +60,7 @@ fun StatisticsScreen(
 
     var selectedLogTypeId by remember { mutableStateOf<Long?>(null) }
 
+    // (保持不变) 过滤列表的逻辑符合要求
     val filteredLogs = remember(selectedLogTypeId, allLogs) {
         if (selectedLogTypeId == null) {
             allLogs
@@ -68,7 +69,7 @@ fun StatisticsScreen(
         }
     }
 
-    // (*** 1. 准备排序后的数据 ***)
+    // (保持不变)
     val sortedEntries = remember(allEntries) {
         allEntries
             .sortedBy { it.date }
@@ -78,7 +79,8 @@ fun StatisticsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("统计分析 (L16)") },
+                // [修改点 1] 移除 (L16)
+                title = { Text("统计分析") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
@@ -104,7 +106,8 @@ fun StatisticsScreen(
                     StatisticsCharts(
                         sortedEntries = sortedEntries,
                         allLogs = allLogs,
-                        logTypes = logTypes
+                        logTypes = logTypes,
+                        selectedLogTypeId = selectedLogTypeId // [修改点 2] 传入状态
                     )
                 }
 
@@ -197,15 +200,16 @@ private fun LogRecordCard(
     }
 }
 
-// (*** 2. Canvas: 重写图表 Composable ***)
+// [修改点 3] 重写图表 Composable
 @Composable
 private fun StatisticsCharts(
     sortedEntries: List<DiaryEntry>,
     allLogs: List<LogItemWithTexts>,
-    logTypes: List<LogType>
+    logTypes: List<LogType>,
+    selectedLogTypeId: Long? // 新增: 接收选中状态
 ) {
-    // 1. 将数据转换为 YCharts 所需的 Point 列表
-    val (moodPoints, durationPoints) = rememberChartEntries(sortedEntries, allLogs, logTypes)
+    // 1. (已修改) 将 selectedLogTypeId 传入数据计算函数
+    val (moodPoints, durationPoints) = rememberChartEntries(sortedEntries, allLogs, logTypes, selectedLogTypeId)
     val dates = remember(sortedEntries) {
         sortedEntries.map {
             LocalDate.parse(it.date).format(DateTimeFormatter.ofPattern("MM/dd"))
@@ -217,69 +221,90 @@ private fun StatisticsCharts(
         return
     }
 
+    // 2. 新增: 获取选中类型和是否为“全部”
+    val selectedLogType = remember(selectedLogTypeId, logTypes) {
+        logTypes.find { it.id == selectedLogTypeId }
+    }
+    val isAllSelected = selectedLogTypeId == null
+
     val moodColor = MaterialTheme.colorScheme.primary
     val durationColor = MaterialTheme.colorScheme.secondary
 
-    // --- 3. 心情图表 ---
+    // --- 3. 修改渲染逻辑 ---
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("心情曲线 (近30条)", style = MaterialTheme.typography.titleLarge)
-        MinimalLineChart(
-            points = moodPoints,
-            color = moodColor,
-            yAxisLabels = listOf("😢", "😟", "😐", "😊", "🤩"),
-            xAxisLabels = dates,
-            minY = 0f,
-            maxY = 4f
-        )
 
-        // --- 4. 时长图表 ---
-        Text("时长曲线 (近30条)", style = MaterialTheme.typography.titleLarge)
-        val maxDuration = remember(durationPoints) { (durationPoints.maxOrNull() ?: 1f) + 1f }
-        val durationLabels = remember(maxDuration) {
-            val steps = 4
-            (0..steps).map {
-                val value = (it.toFloat() / steps) * maxDuration
-                "${value.roundToInt()}h"
-            }
+        // 逻辑 1: “全部”时显示心情
+        if (isAllSelected) {
+            Text("心情曲线 (近30条)", style = MaterialTheme.typography.titleLarge)
+            MinimalLineChart(
+                points = moodPoints,
+                color = moodColor,
+                yAxisLabels = listOf("😢", "😟", "😐", "😊", "🤩"),
+                xAxisLabels = dates,
+                minY = 0f,
+                maxY = 4f
+            )
         }
 
-        MinimalLineChart(
-            points = durationPoints,
-            color = durationColor,
-            yAxisLabels = durationLabels,
-            xAxisLabels = dates,
-            minY = 0f,
-            maxY = maxDuration
-        )
+        // 逻辑 2: “特定栏目”且“该栏目有hasDuration”时显示时长
+        if (selectedLogType != null && selectedLogType.hasDuration) {
+            Text("${selectedLogType.name}时长曲线 (近30条)", style = MaterialTheme.typography.titleLarge)
+
+            // (计算移到这里，确保只在需要时计算)
+            val maxDuration = remember(durationPoints) { (durationPoints.maxOrNull() ?: 1f) + 1f }
+            val durationLabels = remember(maxDuration) {
+                val steps = 4
+                (0..steps).map {
+                    val value = (it.toFloat() / steps) * maxDuration
+                    "${value.roundToInt()}h"
+                }
+            }
+
+            MinimalLineChart(
+                points = durationPoints,
+                color = durationColor,
+                yAxisLabels = durationLabels,
+                xAxisLabels = dates,
+                minY = 0f,
+                maxY = maxDuration
+            )
+        }
     }
 }
 
-// (*** 3. Canvas: 转换数据为原始 Float 列表 ***)
+// [修改点 4] 转换数据为原始 Float 列表
 @Composable
 private fun rememberChartEntries(
     sortedEntries: List<DiaryEntry>,
     allLogs: List<LogItemWithTexts>,
-    logTypes: List<LogType>
+    logTypes: List<LogType>,
+    selectedLogTypeId: Long? // 新增: 接收选中状态
 ): Pair<List<Float>, List<Float>> {
 
-    return remember(sortedEntries, allLogs, logTypes) {
+    return remember(sortedEntries, allLogs, logTypes, selectedLogTypeId) { // 依赖项更新
 
         val moodEntries = sortedEntries.map { it.moodScore.toFloat() }
 
-        val logTypesWithDuration = logTypes.filter { it.hasDuration }.map { it.id }
+        // 修改时长计算逻辑
         val durationEntries = sortedEntries.map { entry ->
-            allLogs
-                .filter { it.logItem.diaryDate == entry.date }
-                .filter { it.logItem.logTypeId in logTypesWithDuration }
-                .sumOf { (it.logItem.duration ?: 0f).toDouble() }
-                .toFloat()
+            if (selectedLogTypeId == null) {
+                // “全部”时，不计算时长 (返回 0)
+                0f
+            } else {
+                // 特定栏目时，只计算该栏目的时长
+                allLogs
+                    .filter { it.logItem.diaryDate == entry.date }
+                    .filter { it.logItem.logTypeId == selectedLogTypeId }
+                    .sumOf { (it.logItem.duration ?: 0f).toDouble() }
+                    .toFloat()
+            }
         }
 
         Pair(moodEntries, durationEntries)
     }
 }
 
-// (*** 4. Canvas: 自定义图表组件 ***)
+// (MinimalLineChart 保持不变)
 @Composable
 private fun MinimalLineChart(
     points: List<Float>,
