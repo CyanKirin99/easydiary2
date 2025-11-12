@@ -1,5 +1,6 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/DiaryViewModel.kt
-// [已修复]: 方案E：修复图片压缩逻辑，使用 "复制-处理-保存" 策略解决“空白图”Bug
+// [已修复]: 方案F：修复导入/导出逻辑，使其支持图片文件的备份和恢复
+// [已修复]: (KSP 错误) 修复 exportHumanReadableCsv 中的 'item.id' 空指针问题
 package com.example.easydiary.ui
 
 import android.content.Context
@@ -42,6 +43,7 @@ import java.util.zip.ZipOutputStream
 
 import androidx.core.net.toUri
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.UUID
 import android.graphics.Bitmap
@@ -263,14 +265,9 @@ class DiaryViewModel(
         }
     }
 
-    // --- [修改点: 媒体处理逻辑 (方案E - "复制-处理-保存")] ---
-
-    /**
-     * (IO) 核心函数：复制、缩放、压缩并保存图片
-     * @return 持久化的文件路径 (String)
-     */
+    // --- [媒体处理逻辑 (方案E - 保持不变)] ---
+    // (copyMediaToInternal, resizeAndCompressImage, deleteMediaFile, handleMediaSelection 均保持不变)
     private suspend fun copyMediaToInternal(uri: Uri): String? = withContext(Dispatchers.IO) {
-        // 1. (IO) 将 content:// URI 复制到 APP 的临时缓存文件
         val tempFile = File(appContext.cacheDir, "${UUID.randomUUID()}.tmp")
         try {
             appContext.contentResolver.openInputStream(uri)?.use { inputStream ->
@@ -281,53 +278,37 @@ class DiaryViewModel(
         } catch (e: Exception) {
             e.printStackTrace()
             tempFile.delete()
-            return@withContext null // 复制失败
+            return@withContext null
         }
-
-        // 2. (CPU) 现在我们有了一个安全的本地文件 (tempFile)，对它进行压缩
         val bitmap = resizeAndCompressImage(tempFile, 1080)
         if (bitmap == null) {
             tempFile.delete()
-            return@withContext null // 压缩失败
+            return@withContext null
         }
-
-        // 3. (IO) 将压缩后的 Bitmap 保存到 *持久化* 存储
         val destFile = File(File(appContext.filesDir, "media").apply { mkdirs() }, "${UUID.randomUUID()}.jpg")
         try {
             FileOutputStream(destFile).use { outputStream ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream) // 85% 质量
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
             }
-            bitmap.recycle() // 释放内存
-
-            // 4. (IO) 清理临时文件
+            bitmap.recycle()
             tempFile.delete()
-
-            // 5. 返回最终路径
             destFile.absolutePath
         } catch (e: Exception) {
             e.printStackTrace()
             tempFile.delete()
             destFile.delete()
-            return@withContext null // 保存失败
+            return@withContext null
         }
     }
-
-    /**
-     * (IO) 图像处理辅助函数 (现在操作一个安全的 File)
-     */
     private fun resizeAndCompressImage(file: File, maxPixelSize: Int): Bitmap? {
         try {
-            // --- 1. 获取原始图像尺寸 ---
             val options = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
             }
             BitmapFactory.decodeFile(file.absolutePath, options)
-
             val srcWidth = options.outWidth
             val srcHeight = options.outHeight
             if (srcWidth <= 0 || srcHeight <= 0) return null
-
-            // --- 2. 计算缩放比例 (inSampleSize) ---
             var inSampleSize = 1
             if (srcHeight > maxPixelSize || srcWidth > maxPixelSize) {
                 val halfHeight = srcHeight / 2
@@ -336,8 +317,6 @@ class DiaryViewModel(
                     inSampleSize *= 2
                 }
             }
-
-            // --- 3. 获取旋转信息 (Exif) ---
             val exif = ExifInterface(file.absolutePath)
             val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
             val rotation = when (orientation) {
@@ -346,15 +325,10 @@ class DiaryViewModel(
                 ExifInterface.ORIENTATION_ROTATE_270 -> 270
                 else -> 0
             }
-
-            // --- 4. (IO) 加载缩放后的 Bitmap 到内存 ---
             options.inJustDecodeBounds = false
             options.inSampleSize = inSampleSize
             options.inPreferredConfig = Bitmap.Config.ARGB_8888
-
             var bitmap = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
-
-            // --- 5. (CPU) 旋转 Bitmap (如果需要) ---
             if (rotation != 0) {
                 val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
                 val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
@@ -363,18 +337,12 @@ class DiaryViewModel(
                 }
                 bitmap = rotatedBitmap
             }
-
             return bitmap
-
         } catch (e: Exception) {
             e.printStackTrace()
             return null
         }
     }
-
-    /**
-     * (IO) 从内部存储中删除一个文件
-     */
     private suspend fun deleteMediaFile(path: String?) = withContext(Dispatchers.IO) {
         if (path == null) return@withContext
         try {
@@ -387,36 +355,25 @@ class DiaryViewModel(
             e.printStackTrace()
         }
     }
-
-    /**
-     * (UI) 媒体选择的入口点
-     */
     fun handleMediaSelection(logTypeId: Long, uri: Uri?) {
         viewModelScope.launch {
             val oldPath = _entryState.value.logData[logTypeId]?.mediaPath
             var newPath: String? = null
-
             if (uri != null) {
-                // (IO) 复制、压缩、保存
                 newPath = copyMediaToInternal(uri)
                 if (newPath == null) {
-                    return@launch // 复制失败
+                    return@launch
                 }
             }
-
-            // (IO) 仅当路径改变时才删除旧文件
             if (oldPath != newPath) {
                 deleteMediaFile(oldPath)
             }
-
-            // (UI) 更新状态
             onMediaPathChange(logTypeId, newPath)
         }
     }
-    // --- [媒体处理 结束] ---
 
 
-    // --- [导入/导出 逻辑 (保持不变, 已修复)] ---
+    // --- [导入/导出 逻辑 (已修复图片备份)] ---
 
     private fun csvEscape(data: String?): String {
         if (data == null) return ""
@@ -427,8 +384,10 @@ class DiaryViewModel(
             escaped
         }
     }
+
     private fun csvEscape(data: Any?): String {
-        return csvEscape(data?.toString())
+        if (data == null) return "null"
+        return csvEscape(data.toString())
     }
 
     private fun entriesToCsv(entries: List<DiaryEntry>): String {
@@ -496,14 +455,31 @@ class DiaryViewModel(
     suspend fun exportDataToZip(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
         try {
             val data = repository.getExportData()
+            val mediaDir = File(appContext.filesDir, "media")
 
+            // 1. 创建可移植的 LogItems (将绝对路径转为相对路径)
+            val portableLogItems = data.logItems.map { logItem ->
+                if (logItem.mediaPath == null) {
+                    logItem
+                } else {
+                    val file = File(logItem.mediaPath)
+                    if (file.exists() && file.absolutePath.startsWith(mediaDir.absolutePath)) {
+                        logItem.copy(mediaPath = "media/${file.name}")
+                    } else {
+                        logItem.copy(mediaPath = null)
+                    }
+                }
+            }
+
+            // 2. 使用可移植的 LogItems 生成 CSV
             val csvEntries = entriesToCsv(data.entries)
             val csvLogTypes = logTypesToCsv(data.logTypes)
-            val csvLogItems = logItemsToCsv(data.logItems)
+            val csvLogItems = logItemsToCsv(portableLogItems) // <-- 使用修改后的列表
             val csvTextEntries = textEntriesToCsv(data.textEntries)
 
             context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                 ZipOutputStream(outputStream).use { zipStream ->
+                    // 3. 写入 4 个 CSV 文件
                     zipStream.putNextEntry(ZipEntry("diary_entries.csv"))
                     zipStream.write(csvEntries.toByteArray())
                     zipStream.closeEntry()
@@ -519,6 +495,18 @@ class DiaryViewModel(
                     zipStream.putNextEntry(ZipEntry("text_entries.csv"))
                     zipStream.write(csvTextEntries.toByteArray())
                     zipStream.closeEntry()
+
+                    // 4. 遍历原始数据，写入图片文件
+                    for (logItem in data.logItems.filter { it.mediaPath != null }) {
+                        val file = File(logItem.mediaPath!!)
+                        if (file.exists() && file.absolutePath.startsWith(mediaDir.absolutePath)) {
+                            zipStream.putNextEntry(ZipEntry("media/${file.name}"))
+                            FileInputStream(file).use { fileInput ->
+                                fileInput.copyTo(zipStream)
+                            }
+                            zipStream.closeEntry()
+                        }
+                    }
                 }
             }
             true
@@ -531,13 +519,33 @@ class DiaryViewModel(
     suspend fun importDataFromZip(context: Context, uri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val csvMap = mutableMapOf<String, String>()
+            val newMediaPaths = mutableMapOf<String, String>()
+
+            val mediaDir = File(appContext.filesDir, "media").apply { mkdirs() }
+            mediaDir.listFiles()?.forEach { it.delete() }
 
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 ZipInputStream(inputStream).use { zipStream ->
                     var entry = zipStream.nextEntry
                     while (entry != null) {
-                        val content = zipStream.bufferedReader().readText()
-                        csvMap[entry.name] = content
+                        val entryName = entry.name
+                        if (entryName.endsWith(".csv")) {
+                            val content = zipStream.bufferedReader().readText()
+                            csvMap[entryName] = content
+                        } else if (entryName.startsWith("media/") && !entry.isDirectory) {
+                            try {
+                                val fileName = File(entryName).name
+                                val destFile = File(mediaDir, fileName)
+
+                                FileOutputStream(destFile).use { fileOutput ->
+                                    zipStream.copyTo(fileOutput)
+                                }
+                                newMediaPaths[entryName] = destFile.absolutePath
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                        zipStream.closeEntry()
                         entry = zipStream.nextEntry
                     }
                 }
@@ -548,12 +556,16 @@ class DiaryViewModel(
 
             val logItems = csvMap["log_items.csv"]?.lines()?.drop(1)?.filter { it.isNotBlank() }?.map {
                 val parts = it.split(csvRegex, limit = 5)
+
+                val relativePath = if(parts[4].trim() == "null") null else parts[4].removeCsvQuotes().trim()
+                val newAbsolutePath = relativePath?.let { newMediaPaths[it] }
+
                 LogItem(
                     parts[0].trim().toLong(),
                     parts[1].removeCsvQuotes(),
                     parts[2].trim().toLong(),
                     if(parts[3].trim() == "null") null else parts[3].trim().toFloat(),
-                    if(parts[4].trim() == "null") null else parts[4].removeCsvQuotes().trim()
+                    newAbsolutePath
                 )
             } ?: emptyList()
 
@@ -613,7 +625,10 @@ class DiaryViewModel(
                     val item = dailyLogItems.find { it.logTypeId == logType.id }
 
                     if (logType.hasText) {
+                        // --- [编译错误修复点] ---
+                        // 'item' 是 LogItem? (可空)，所以我们用 item?.id
                         val texts = (textEntriesMap[item?.id] ?: emptyList()).sortedBy { it.order }
+                        // --- [修复点结束] ---
                         val textContent = texts.joinToString("\n") { it.content }
                         row.add(csvEscape(textContent))
                     }

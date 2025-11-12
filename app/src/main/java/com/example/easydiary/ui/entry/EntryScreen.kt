@@ -1,8 +1,12 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/entry/EntryScreen.kt
-// [已修改]: 1. 导入新图标和组件。 2. 修改 ViewLogCard 以支持图片展开/收起。
+// [已修改]: 1. 导入 Uri。
+// [已修改]: 2. EditModeContent 调用 handleMediaSelection。
+// [已修改]: 3. 移除 ViewMood, ViewLogCard, ViewTextCard (已移至 EntryComponents.kt)。
+// [已修改]: 4. 导入 ViewMood, ViewLogCard, ViewTextCard。
+
 package com.example.easydiary.ui.entry
 
-// [修改点 1] 导入 BackHandler
+import android.net.Uri // [修改点 1] 新增导入
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
@@ -18,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp // (修复)
+import androidx.compose.ui.unit.sp
 import com.example.easydiary.data.model.DiaryEntryWithDetails
 import com.example.easydiary.data.model.LogType
 import com.example.easydiary.ui.DiaryViewModel
@@ -29,13 +33,14 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.ContentScale
-
-// --- [新增导入] ---
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.ui.graphics.Color
-// --- [新增导入 结束] ---
+// [修改点 4] 导入移动的组件
+import com.example.easydiary.ui.entry.ViewLogCard
+import com.example.easydiary.ui.entry.ViewMood
+import com.example.easydiary.ui.entry.ViewTextCard
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,7 +73,6 @@ fun EntryScreen(
 
     var totalDrag by remember { mutableStateOf(0f) }
 
-    // [修改点 2] 拦截系统返回键
     BackHandler(enabled = isEditing) {
         isEditing = false
     }
@@ -102,7 +106,6 @@ fun EntryScreen(
             TopAppBar(
                 title = { Text(selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)) },
                 navigationIcon = {
-                    // [修改点 3] 修改顶部返回箭头的逻辑
                     IconButton(onClick = {
                         if (isEditing) {
                             isEditing = false // 从编辑模式退回查看模式
@@ -124,12 +127,12 @@ fun EntryScreen(
                     } else {
                         IconButton(
                             onClick = { showDeleteDialog = true },
-                            enabled = diaryDetails != null // (Bug 修复)
+                            enabled = diaryDetails != null
                         ) {
                             Icon(Icons.Default.Delete, "删除")
                         }
                         IconButton(
-                            onClick = { isEditing = true } // (Bug 修复)
+                            onClick = { isEditing = true }
                         ) {
                             Icon(Icons.Default.Edit, "编辑")
                         }
@@ -178,8 +181,7 @@ fun EntryScreen(
 }
 
 
-// --- 编辑模式 (已连接) ---
-// (EditModeContent 保持不变)
+// --- [修改点 2: EditModeContent] ---
 @Composable
 fun EditModeContent(
     modifier: Modifier = Modifier,
@@ -201,7 +203,8 @@ fun EditModeContent(
                 onToggleExpand = { viewModel.onLogCardToggled(logType.id) },
                 onTextsChange = { viewModel.onLogTextsChange(logType.id, it) },
                 onDurationChange = { viewModel.onLogDurationChange(logType.id, it) },
-                onMediaPathChange = { path -> viewModel.onMediaPathChange(logType.id, path) }
+                // onMediaPathChange = { path -> viewModel.onMediaPathChange(logType.id, path) } // (移除)
+                onMediaChangeRequest = { uri -> viewModel.handleMediaSelection(logType.id, uri) } // (修改)
             )
         }
 
@@ -220,9 +223,9 @@ fun EditModeContent(
         }
     }
 }
+// --- [修改点 2 结束] ---
 
 // --- (新) 查看模式 (已实现) ---
-// (ViewModeContent 保持不变)
 @Composable
 fun ViewModeContent(
     modifier: Modifier = Modifier,
@@ -284,110 +287,6 @@ fun ViewModeContent(
     }
 }
 
-// --- 查看模式的子组件 ---
-
-// (ViewMood 保持不变)
-@Composable
-fun ViewMood(score: Int) {
-    val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
-    val emoji = emojis.getOrNull(score) ?: "😐"
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(emoji, fontSize = 48.sp)
-        Spacer(Modifier.width(16.dp))
-        Text("今天的心情", style = MaterialTheme.typography.titleLarge)
-    }
-}
-
-// --- [修改点: ViewLogCard] ---
-@Composable
-fun ViewLogCard(
-    logItem: com.example.easydiary.data.model.LogItemWithTexts,
-    logType: LogType?
-) {
-    val title = logType?.name ?: "记录 (ID: ${logItem.logItem.logTypeId})"
-    val texts = logItem.texts.map { it.content }
-    val duration = logItem.logItem.duration
-    val mediaPath = logItem.logItem.mediaPath
-
-    ViewTextCard(title = title, texts = texts)
-
-    // --- [修改点 2: 图像显示逻辑] ---
-    if (mediaPath != null) {
-        // 1. 添加状态
-        var isImageExpanded by remember { mutableStateOf(false) }
-
-        // 2. 根据状态决定高度和缩放
-        val (heightModifier, imageScale) = if (isImageExpanded) {
-            // 展开: 无高度限制 (但最大600dp), 适应宽度
-            Pair(Modifier.heightIn(max = 600.dp), ContentScale.FillWidth)
-        } else {
-            // 收起: 固定200dp高度, 裁剪
-            Pair(Modifier.height(200.dp), ContentScale.Crop)
-        }
-
-        // 3. 使用 Box 添加按钮
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp, start = 16.dp, end = 16.dp)
-                .then(heightModifier) // 应用动态高度
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surface) // 背景以防 FillWidth 留白
-        ) {
-            AsyncImage(
-                model = mediaPath,
-                contentDescription = "保存的图片",
-                modifier = Modifier.fillMaxSize(), // 图片填满 Box
-                contentScale = imageScale // 应用动态缩放
-            )
-            // 4. 添加切换按钮
-            IconButton(
-                onClick = { isImageExpanded = !isImageExpanded },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
-            ) {
-                Icon(
-                    Icons.Default.AspectRatio, // 切换图标
-                    "Toggle view",
-                    tint = Color.White
-                )
-            }
-        }
-    }
-    // --- [修改点 2 结束] ---
-
-    if (duration != null && duration > 0f) {
-        Text(
-            "时长: ${duration}h",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 16.dp, top = 8.dp)
-        )
-    }
-}
-
-// (ViewTextCard 保持不变)
-@Composable
-fun ViewTextCard(title: String, texts: List<String>) {
-    if (texts.isEmpty() && title != "明日计划") return
-
-    Card(
-        elevation = CardDefaults.cardElevation(0.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
-            if (texts.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                texts.forEach {
-                    Text("• $it", style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-        }
-    }
-}
+// --- [修改点 3: 移除 ViewMood, ViewLogCard, ViewTextCard] ---
+// (这些组件已移至 EntryComponents.kt)
+// --- [修改点 3 结束] ---

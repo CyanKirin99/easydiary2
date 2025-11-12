@@ -73,8 +73,8 @@ fun SettingsScreen(
         item {
             SettingsItem(
                 icon = Icons.Default.BarChart,
-                title = "统计分析",
-                subtitle = "查看您的心情和时长曲线",
+                title = "快速浏览",
+                subtitle = "按类查看您的记录和时长曲线",
                 onClick = { onNavigate(Screen.Statistics.route) }
             )
         }
