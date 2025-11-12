@@ -1,4 +1,5 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/entry/EntryComponents.kt
+// [已修改]: 1. MediaPicker 启动器保持 "image/*"。 2. MediaPicker 支持图片展开/收起。
 package com.example.easydiary.ui.entry
 
 import android.net.Uri
@@ -35,7 +36,11 @@ import coil.compose.AsyncImage
 import com.example.easydiary.data.model.LogType
 import kotlin.math.roundToInt
 
-// U9: 心情选择 (无状态)
+// --- [新增导入] ---
+import androidx.compose.material.icons.filled.AspectRatio
+// --- [新增导入 结束] ---
+
+// (MoodSelector 保持不变)
 @Composable
 fun MoodSelector(
     selectedScore: Int,
@@ -54,7 +59,6 @@ fun MoodSelector(
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 emojis.forEachIndexed { index, emoji ->
-                    // (*** 1. 新增: 动画 ***)
                     val scale by animateFloatAsState(
                         targetValue = if (selectedScore == index) 1.25f else 1.0f,
                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -65,7 +69,7 @@ fun MoodSelector(
                         text = emoji,
                         fontSize = 32.sp,
                         modifier = Modifier
-                            .scale(scale) // (*** 2. 应用动画 ***)
+                            .scale(scale)
                             .clip(CircleShape)
                             .clickable { onScoreSelect(index) }
                             .background(
@@ -80,7 +84,7 @@ fun MoodSelector(
     }
 }
 
-// U7 & L9: 明日计划 (无状态)
+// (TomorrowPlanInput 保持不变)
 @Composable
 fun TomorrowPlanInput(
     texts: List<String>,
@@ -102,7 +106,7 @@ fun TomorrowPlanInput(
     }
 }
 
-// L15, U8: 动态日志卡片 (无状态)
+// (DynamicLogCard 保持不变)
 @Composable
 fun DynamicLogCard(
     logType: LogType,
@@ -111,7 +115,7 @@ fun DynamicLogCard(
     onToggleExpand: () -> Unit,
     onTextsChange: (List<String>) -> Unit,
     onDurationChange: (Float) -> Unit,
-    onMediaPathChange: (String?) -> Unit // (*** 3. 新增: 媒体路径回调 ***)
+    onMediaPathChange: (String?) -> Unit
 ) {
     Card(
         elevation = CardDefaults.cardElevation(0.dp),
@@ -140,7 +144,6 @@ fun DynamicLogCard(
                     )
                 }
                 if (logType.hasMedia) {
-                    // (*** 4. 修改: 使用新的 MediaPicker ***)
                     MediaPicker(
                         mediaPath = logData.mediaPath,
                         onMediaPathChange = onMediaPathChange
@@ -151,7 +154,7 @@ fun DynamicLogCard(
     }
 }
 
-// L9: 文本条目列表 (无状态)
+// (TextEntryList 保持不变)
 @Composable
 fun TextEntryList(
     texts: List<String>,
@@ -182,7 +185,6 @@ fun TextEntryList(
             },
             placeholder = { Text(placeholder) },
             modifier = Modifier.fillMaxWidth(),
-            // (*** 这里是修正点 ***)
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
                 val currentText = texts.last()
@@ -204,7 +206,7 @@ fun TextEntryList(
     }
 }
 
-// L10: 时长滑动 (无状态)
+// (DurationSlider 保持不变)
 @Composable
 fun DurationSlider(
     duration: Float,
@@ -221,7 +223,7 @@ fun DurationSlider(
     }
 }
 
-// (*** 5. 新增: MediaPicker Composable ***)
+// --- [修改点: MediaPicker] ---
 @Composable
 fun MediaPicker(
     mediaPath: String?,
@@ -229,48 +231,73 @@ fun MediaPicker(
 ) {
     val context = LocalContext.current
 
-    // 1. 准备图片选择器
+    // 1. 准备图片选择器 (保持 "image/*")
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        // L11: 暂时只保存 URI 字符串
         onMediaPathChange(uri?.toString())
+    }
+
+    // 2. 添加状态
+    var isImageExpanded by remember { mutableStateOf(false) }
+
+    // 3. 根据状态决定高度和缩放
+    val (heightModifier, imageScale) = if (isImageExpanded) {
+        Pair(Modifier.heightIn(max = 600.dp), ContentScale.FillWidth)
+    } else {
+        Pair(Modifier.height(180.dp), ContentScale.Crop)
     }
 
     Column(Modifier.padding(top = 8.dp)) {
         if (mediaPath == null) {
-            // 2. 如果没有图片，显示添加按钮
+            // 4. 如果没有图片，显示添加按钮 (保持 "image/*")
             Button(
                 onClick = {
-                    launcher.launch("image/*")
+                    launcher.launch("image/*") // <-- 保持仅图片
                 }
             ) {
                 Icon(Icons.Default.AddAPhoto, "添加媒体", modifier = Modifier.padding(end = 8.dp))
                 Text("添加图片")
             }
         } else {
-            // 3. 如果有图片，显示预览和移除按钮
+            // 5. 如果有图片，显示预览和按钮
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .then(heightModifier) // 应用动态高度
                     .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surface)
             ) {
                 AsyncImage(
                     model = mediaPath,
                     contentDescription = "选择的图片",
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    contentScale = imageScale // 应用动态缩放
                 )
-                IconButton(
-                    onClick = { onMediaPathChange(null) },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
-                ) {
-                    Icon(Icons.Default.Close, "移除图片", tint = Color.White)
+
+                // 6. 将两个按钮放在右上角
+                Row(modifier = Modifier.align(Alignment.TopEnd)) {
+                    // 切换按钮
+                    IconButton(
+                        onClick = { isImageExpanded = !isImageExpanded },
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Default.AspectRatio, "Toggle view", tint = Color.White)
+                    }
+
+                    // 移除按钮
+                    IconButton(
+                        onClick = { onMediaPathChange(null) },
+                        modifier = Modifier
+                            .padding(top = 8.dp, bottom = 8.dp, end = 8.dp) // 调整内边距
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Default.Close, "移除图片", tint = Color.White)
+                    }
                 }
             }
         }

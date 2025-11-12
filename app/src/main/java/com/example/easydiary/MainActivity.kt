@@ -1,4 +1,5 @@
 // 文件位置: app/src/main/java/com/example/easydiary/MainActivity.kt
+// [已修改]: 注入 Application Context 到 ViewModelFactory
 package com.example.easydiary
 
 import android.app.Application
@@ -34,7 +35,11 @@ class EasyDiaryApplication : Application() {
 
     val settingsRepository by lazy { SettingsRepository(this) }
 
-    val viewModelFactory by lazy { DiaryViewModelFactory(repository, settingsRepository) }
+    // --- [修改点: 注入 Application Context] ---
+    val viewModelFactory by lazy {
+        DiaryViewModelFactory(repository, settingsRepository, this)
+    }
+    // --- [修改点 结束] ---
 }
 
 
