@@ -5,10 +5,13 @@ import androidx.room.*
 import com.example.easydiary.data.model.*
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * 数据访问对象 (DAO)，用于定义数据库操作。
+ */
 @Dao
 interface DiaryDao {
 
-    // --- LogType (L15) ---
+    // --- LogType (记录类型) ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLogType(logType: LogType): Long
 
@@ -21,7 +24,7 @@ interface DiaryDao {
     @Update
     suspend fun updateLogType(logType: LogType)
 
-    // --- DiaryEntry & Details ---
+    // --- DiaryEntry & Details (日记条目与详情) ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDiaryEntry(entry: DiaryEntry)
 
@@ -45,14 +48,14 @@ interface DiaryDao {
     suspend fun deleteLogItem(logItemId: Long)
 
     @Query("SELECT * FROM log_items")
-    fun getAllLogItems(): Flow<List<LogItem>> // (此项将被废弃，但暂不移除)
+    fun getAllLogItems(): Flow<List<LogItem>> // (已废弃，请使用 getAllLogItemsWithTexts)
 
-    // (*** 修复: L16 - 获取所有 LogItems 及其 TextEntries, 按日期降序 ***)
+    // 获取所有 LogItems 及其关联的 TextEntries, 按日期降序
     @Transaction
     @Query("SELECT * FROM log_items ORDER BY diaryDate DESC")
     fun getAllLogItemsWithTexts(): Flow<List<LogItemWithTexts>>
 
-    // --- (*** 1. 新增: 导出 (Export) ***) ---
+    // --- 导出 (Export) ---
     @Query("SELECT * FROM diary_entries")
     suspend fun getAllEntriesForExport(): List<DiaryEntry>
 
@@ -65,7 +68,7 @@ interface DiaryDao {
     @Query("SELECT * FROM text_entries")
     suspend fun getAllTextEntriesForExport(): List<TextEntry>
 
-    // --- (*** 2. 新增: 导入 (Import) ***) ---
+    // --- 导入 (Import) ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun importEntries(entries: List<DiaryEntry>)
 

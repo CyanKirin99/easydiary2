@@ -13,13 +13,16 @@ import androidx.compose.ui.Modifier
 import com.example.easydiary.data.AppTheme
 import com.example.easydiary.ui.DiaryViewModel
 
+/**
+ * “显示模式”设置屏幕 (浅色/深色/跟随系统)。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThemeSettingsScreen(
     viewModel: DiaryViewModel,
     onBack: () -> Unit
 ) {
-    // 1. 订阅 L19 设置
+    // 订阅当前主题设置
     val currentTheme by viewModel.appTheme.collectAsState(initial = AppTheme.SYSTEM)
 
     Scaffold(
@@ -35,7 +38,7 @@ fun ThemeSettingsScreen(
         }
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues)) {
-            // 2. 渲染 L19 选项
+            // 渲染单选项
             SettingsRadioItem(
                 label = "跟随系统",
                 isSelected = currentTheme == AppTheme.SYSTEM,

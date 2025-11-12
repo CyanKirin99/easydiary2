@@ -13,13 +13,16 @@ import androidx.compose.ui.Modifier
 import com.example.easydiary.data.CalendarView
 import com.example.easydiary.ui.DiaryViewModel
 
+/**
+ * “视图选择”设置屏幕 (月视图/周视图)。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ViewSettingsScreen(
     viewModel: DiaryViewModel,
     onBack: () -> Unit
 ) {
-    // 1. 订阅 L14 设置
+    // 订阅当前日历视图设置
     val currentView by viewModel.calendarView.collectAsState(initial = CalendarView.MONTH)
 
     Scaffold(
@@ -35,7 +38,7 @@ fun ViewSettingsScreen(
         }
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues)) {
-            // 2. 渲染 L14 选项
+            // 渲染单选项
             SettingsRadioItem(
                 label = "月视图",
                 isSelected = currentView == CalendarView.MONTH,
@@ -46,7 +49,6 @@ fun ViewSettingsScreen(
                 isSelected = currentView == CalendarView.WEEK,
                 onClick = { viewModel.updateCalendarView(CalendarView.WEEK) }
             )
-            // [已删除] 日视图的 SettingsRadioItem
         }
     }
 }

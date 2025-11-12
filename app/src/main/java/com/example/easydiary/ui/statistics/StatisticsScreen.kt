@@ -1,5 +1,4 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/statistics/StatisticsScreen.kt
-// [已修改]: 1. 添加 7/30/100 天缩放按钮。 2. 动态调整X轴标签显示。
 package com.example.easydiary.ui.statistics
 
 import androidx.compose.foundation.Canvas
@@ -52,11 +51,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
-// --- [新增导入] ---
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
-// --- [新增导入 结束] ---
 
+/**
+ * “统计分析”屏幕。
+ * 显示心情曲线和按类型筛选的日志时长曲线，支持 7/30/100 天缩放和拖动。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen(
@@ -71,6 +72,7 @@ fun StatisticsScreen(
 
     var selectedLogTypeId by remember { mutableStateOf<Long?>(null) }
 
+    // 根据选择的 LogType 筛选日志列表
     val filteredLogs = remember(selectedLogTypeId, allLogs) {
         if (selectedLogTypeId == null) {
             allLogs
@@ -79,30 +81,31 @@ fun StatisticsScreen(
         }
     }
 
-    // --- [修改点 1: 缩放状态] ---
+    // --- 图表缩放与平移状态 ---
     val allSortedEntries = remember(allEntries) {
         allEntries
             .sortedBy { it.date }
     }
 
-    // 1a. 定义缩放级别
+    // 1. 定义缩放级别 (7天, 30天, 100天)
     val zoomLevels = listOf(7, 30, 100)
     var currentZoomIndex by remember { mutableStateOf(0) } // 默认 7 天
     val windowSize by derivedStateOf { zoomLevels[currentZoomIndex] }
 
-    // 1b. 偏移量现在依赖于 windowSize
+    // 2. 定义图表偏移量（基于天数）
     val maxDayOffset by derivedStateOf { (allSortedEntries.size - windowSize).coerceAtLeast(0) }
     var chartDayOffset by remember { mutableStateOf(0) }
     var accumulatedDragPx by remember { mutableStateOf(0f) }
-    val pxPerDay = 30f
+    val pxPerDay = 30f // 拖动多少像素等于 1 天
 
-    // 1c. 确保更改缩放时，偏移量不会出界
+    // 3. 确保更改缩放时，偏移量不会出界
     LaunchedEffect(windowSize) {
         if (chartDayOffset > maxDayOffset) {
             chartDayOffset = maxDayOffset
         }
     }
 
+    // 4. 根据窗口大小和偏移量，计算当前可见的日记条目
     val visibleEntries = remember(allSortedEntries, chartDayOffset, windowSize) {
         if (allSortedEntries.isEmpty()) {
             emptyList()
@@ -117,7 +120,6 @@ fun StatisticsScreen(
             }
         }
     }
-    // --- [修改点 1 结束] ---
 
     Scaffold(
         topBar = {
@@ -133,11 +135,13 @@ fun StatisticsScreen(
     ) { paddingValues ->
         Column(Modifier.padding(paddingValues).fillMaxSize()) {
 
+            // 筛选按钮 (全部, 学习, 生活, ...)
             FilterButtons(
                 logTypes = logTypes,
                 selectedLogTypeId = selectedLogTypeId,
                 onFilterSelect = {
                     selectedLogTypeId = it
+                    // 重置图表偏移量
                     chartDayOffset = 0
                     accumulatedDragPx = 0f
                 }
@@ -148,8 +152,8 @@ fun StatisticsScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // 图表
                 item {
-                    // --- [修改点 2: 传递缩放回调] ---
                     StatisticsCharts(
                         sortedEntries = visibleEntries,
                         allLogs = allLogs,
@@ -159,6 +163,7 @@ fun StatisticsScreen(
                         onChartDrag = { dragAmount ->
                             accumulatedDragPx += dragAmount
 
+                            // 拖动超过阈值 (pxPerDay) 时才平移
                             if (kotlin.math.abs(accumulatedDragPx) > pxPerDay) {
                                 val daysToShift = (accumulatedDragPx / pxPerDay).roundToInt()
                                 val newOffset = chartDayOffset + daysToShift
@@ -179,15 +184,16 @@ fun StatisticsScreen(
                         isZoomInEnabled = currentZoomIndex > 0,
                         isZoomOutEnabled = currentZoomIndex < zoomLevels.lastIndex
                     )
-                    // --- [修改点 2 结束] ---
                 }
 
+                // 下方的日志列表
                 items(filteredLogs, key = { it.logItem.id }) { logItem ->
                     val logType = logTypes.find { it.id == logItem.logItem.logTypeId }
                     LogRecordCard(
                         logItem = logItem,
                         logType = logType,
                         onClick = {
+                            // 点击跳转到该日期的 EntryScreen
                             onLogClick(LocalDate.parse(logItem.logItem.diaryDate))
                         }
                     )
@@ -197,7 +203,9 @@ fun StatisticsScreen(
     }
 }
 
-// (FilterButtons Composable 保持不变)
+/**
+ * 顶部的 LogType 筛选按钮 (SegmentedButtonRow)。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FilterButtons(
@@ -227,7 +235,9 @@ private fun FilterButtons(
     }
 }
 
-// (LogRecordCard Composable 保持不变)
+/**
+ * 统计页面下方显示的单个日志条目卡片。
+ */
 @Composable
 private fun LogRecordCard(
     logItem: LogItemWithTexts,
@@ -257,10 +267,13 @@ private fun LogRecordCard(
                 )
             }
             Spacer(Modifier.height(8.dp))
+
+            // 显示文本
             logItem.texts.forEach { text ->
                 Text("• ${text.content}", style = MaterialTheme.typography.bodyLarge)
             }
 
+            // 显示图片
             val mediaPath = logItem.logItem.mediaPath
             if (mediaPath != null) {
                 Spacer(Modifier.height(8.dp))
@@ -275,6 +288,7 @@ private fun LogRecordCard(
                 )
             }
 
+            // 显示时长
             val duration = logItem.logItem.duration
             if (logType?.hasDuration == true && duration != null && duration > 0f) {
                 Text(
@@ -288,22 +302,26 @@ private fun LogRecordCard(
     }
 }
 
-// --- [修改点 3: StatisticsCharts 接收新参数] ---
+/**
+ * 包含图表（心情和时长）的容器。
+ */
 @Composable
 private fun StatisticsCharts(
     sortedEntries: List<DiaryEntry>,
     allLogs: List<LogItemWithTexts>,
     logTypes: List<LogType>,
     selectedLogTypeId: Long?,
-    windowSize: Int, // [新增]
+    windowSize: Int,
     onChartDrag: (Float) -> Unit,
-    onZoomIn: () -> Unit, // [新增]
-    onZoomOut: () -> Unit, // [新增]
-    isZoomInEnabled: Boolean, // [新增]
-    isZoomOutEnabled: Boolean // [新增]
+    onZoomIn: () -> Unit,
+    onZoomOut: () -> Unit,
+    isZoomInEnabled: Boolean,
+    isZoomOutEnabled: Boolean
 ) {
+    // 1. 计算图表数据点
     val (moodPoints, durationPoints) = rememberChartEntries(sortedEntries, allLogs, logTypes, selectedLogTypeId)
-    // "dates" 现在可能是 7, 30, 或 100 个
+
+    // 2. 准备 X 轴标签 (日期)
     val dates = remember(sortedEntries) {
         sortedEntries.map {
             LocalDate.parse(it.date).format(DateTimeFormatter.ofPattern("MM/dd"))
@@ -323,18 +341,18 @@ private fun StatisticsCharts(
     val moodColor = MaterialTheme.colorScheme.primary
     val durationColor = MaterialTheme.colorScheme.secondary
 
-    // (Y轴逻辑 保持不变)
+    // 3. 计算 Y 轴最大值 (时长)
     val globalMaxDuration = remember(allLogs, selectedLogTypeId, logTypes) {
         if (selectedLogTypeId == null) {
-            4f
+            4f // 默认值
         } else {
             val logType = logTypes.find { it.id == selectedLogTypeId }
             if (logType?.hasDuration == true) {
                 (allLogs
                     .filter { it.logItem.logTypeId == selectedLogTypeId }
-                    .maxOfOrNull { it.logItem.duration ?: 0f } ?: 1f) + 1f
+                    .maxOfOrNull { it.logItem.duration ?: 0f } ?: 1f) + 1f // 最大值 + 1 作为 Y 轴顶
             } else {
-                4f
+                4f // 默认值
             }
         }
     }
@@ -342,6 +360,7 @@ private fun StatisticsCharts(
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.pointerInput(selectedLogTypeId, windowSize) { // 依赖项更新
+            // 监听水平拖动
             detectHorizontalDragGestures(
                 onHorizontalDrag = { change, dragAmount ->
                     change.consume()
@@ -350,7 +369,7 @@ private fun StatisticsCharts(
             )
         }
     ) {
-        // [修改点 4] 提取 ChartTitleRow
+        // 心情曲线 (仅在“全部”时显示)
         if (isAllSelected) {
             ChartTitleRow(
                 title = "心情曲线 (${windowSize}天)",
@@ -369,6 +388,7 @@ private fun StatisticsCharts(
             )
         }
 
+        // 时长曲线 (仅在选择了带时长的 LogType 时显示)
         if (selectedLogType != null && selectedLogType.hasDuration) {
             ChartTitleRow(
                 title = "${selectedLogType.name}时长 (${windowSize}天)",
@@ -378,6 +398,7 @@ private fun StatisticsCharts(
                 isZoomOutEnabled = isZoomOutEnabled
             )
 
+            // 动态计算 Y 轴（时长）标签
             val durationLabels = remember(globalMaxDuration) {
                 val steps = 4
                 (0..steps).map {
@@ -397,9 +418,10 @@ private fun StatisticsCharts(
         }
     }
 }
-// --- [修改点 3 结束] ---
 
-// --- [新增: ChartTitleRow Composable] ---
+/**
+ * 图表标题行，包含缩放按钮。
+ */
 @Composable
 private fun ChartTitleRow(
     title: String,
@@ -415,20 +437,22 @@ private fun ChartTitleRow(
     ) {
         Text(title, style = MaterialTheme.typography.titleLarge)
         Row {
-            // 缩小 (Zoom In) = 更少的天数
+            // 缩小 (Zoom In) = 更少的天数 (e.g. 30 -> 7)
             IconButton(onClick = onZoomIn, enabled = isZoomInEnabled) {
                 Icon(Icons.Default.ZoomIn, "缩小视图")
             }
-            // 放大 (Zoom Out) = 更多的天数
+            // 放大 (Zoom Out) = 更多的天数 (e.g. 7 -> 30)
             IconButton(onClick = onZoomOut, enabled = isZoomOutEnabled) {
                 Icon(Icons.Default.ZoomOut, "放大视图")
             }
         }
     }
 }
-// --- [新增 结束] ---
 
-// (rememberChartEntries Composable 保持不变)
+/**
+ * (辅助函数)
+ * 根据传入的 entries 和筛选条件，计算图表所需的数据点 (Points)。
+ */
 @Composable
 private fun rememberChartEntries(
     sortedEntries: List<DiaryEntry>,
@@ -439,12 +463,15 @@ private fun rememberChartEntries(
 
     return remember(sortedEntries, allLogs, logTypes, selectedLogTypeId) {
 
+        // 心情数据点
         val moodEntries = sortedEntries.map { it.moodScore.toFloat() }
 
+        // 时长数据点
         val durationEntries = sortedEntries.map { entry ->
             if (selectedLogTypeId == null) {
-                0f
+                0f // "全部" 模式不计算时长
             } else {
+                // 汇总当天、该类型的所有时长
                 allLogs
                     .filter { it.logItem.diaryDate == entry.date }
                     .filter { it.logItem.logTypeId == selectedLogTypeId }
@@ -458,13 +485,16 @@ private fun rememberChartEntries(
 }
 
 
-// --- [修改点 5: MinimalLineChart X轴逻辑] ---
+/**
+ * 最小化的折线图 Composable。
+ * 负责绘制 Y 轴标签、网格线、数据点、折线和 X 轴标签。
+ */
 @Composable
 private fun MinimalLineChart(
     points: List<Float>,
     color: Color,
     yAxisLabels: List<String>,
-    xAxisLabels: List<String>, // 现在会收到 7, 30, 或 100 个
+    xAxisLabels: List<String>, // 可能是 7, 30, 或 100 个
     minY: Float,
     maxY: Float,
     modifier: Modifier = Modifier
@@ -481,7 +511,7 @@ private fun MinimalLineChart(
             .fillMaxWidth()
             .height(200.dp)
     ) {
-        // 1. Y 轴标签 (保持不变)
+        // 1. Y 轴标签
         Column(
             modifier = Modifier
                 .width(yAxisWidth)
@@ -506,9 +536,10 @@ private fun MinimalLineChart(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                // ... (Canvas 内部绘制 保持不变) ...
                 val chartWidth = size.width
                 val chartHeight = size.height
+
+                // 绘制 Y 轴虚线网格
                 val yStepCount = yAxisLabels.size - 1
                 (0..yStepCount).forEach { i ->
                     val y = chartHeight * (1f - (i.toFloat() / yStepCount))
@@ -520,21 +551,26 @@ private fun MinimalLineChart(
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
                     )
                 }
+
+                // 绘制数据点和折线
                 val path = Path()
                 val xStep = if (points.size > 1) {
                     chartWidth / (points.size - 1)
                 } else {
                     0f
                 }
+
                 points.forEachIndexed { index, y ->
                     val xPos = if (points.size == 1) {
-                        chartWidth / 2
+                        chartWidth / 2 // 只有一个点时居中
                     } else {
                         index * xStep
                     }
+
                     val yPosRange = (maxY - minY).coerceAtLeast(1f)
                     val yNormalized = (y - minY) / yPosRange
                     val yPos = chartHeight * (1f - yNormalized)
+
                     if (index == 0) {
                         path.moveTo(xPos, yPos)
                     } else {
@@ -542,6 +578,8 @@ private fun MinimalLineChart(
                     }
                     drawCircle(color = color, radius = 3.dp.toPx(), center = Offset(xPos, yPos))
                 }
+
+                // 绘制折线
                 if (points.size > 1) {
                     drawPath(
                         path = path,
@@ -554,7 +592,7 @@ private fun MinimalLineChart(
                 }
             }
 
-            // --- [修改点 5: 动态 X 轴标签] ---
+            // 3. 动态 X 轴标签
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -563,7 +601,7 @@ private fun MinimalLineChart(
             ) {
                 val size = xAxisLabels.size
                 if (size <= 10) {
-                    // 视图 <= 10 天 (例如 7-day): 显示所有标签，完美对齐
+                    // 视图 <= 10 天 (例如 7-day): 显示所有标签，均匀分布
                     xAxisLabels.forEach { label ->
                         Text(
                             text = label,
@@ -574,7 +612,7 @@ private fun MinimalLineChart(
                         )
                     }
                 } else {
-                    // 视图 > 10 天 (例如 30/100-day): 显示 首/中/尾
+                    // 视图 > 10 天 (例如 30/100-day): 仅显示 首/中/尾
                     val first = xAxisLabels.firstOrNull() ?: ""
                     val middle = xAxisLabels.getOrNull(size / 2) ?: ""
                     val last = xAxisLabels.lastOrNull() ?: ""
@@ -584,7 +622,6 @@ private fun MinimalLineChart(
                     Text(text = last, fontSize = 10.sp, color = labelColor, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                 }
             }
-            // --- [修改点 5 结束] ---
         }
     }
 }

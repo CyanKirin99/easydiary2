@@ -1,7 +1,4 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/home/HomeScreen.kt
-// [已修改]: 1. 移除了 Pager 和 THREE_DAY 相关的无限循环修复。
-// [已修改]: 2. 移除了 PagerState, CoroutineScope 和相关辅助函数。
-// [已修改]: 3. 移除了 THREE_DAY 的所有逻辑分支。
 package com.example.easydiary.ui.home
 
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -36,6 +33,10 @@ import java.util.Locale
 import androidx.compose.runtime.snapshotFlow
 
 
+/**
+ * 主屏幕 (Home)，显示日历或周视图。
+ * 负责处理视图模式 (月/周) 切换、日期/月份/年份选择，以及左右滑动切换。
+ */
 @Composable
 fun HomeScreen(
     viewModel: DiaryViewModel,
@@ -53,24 +54,24 @@ fun HomeScreen(
         allLogs.groupBy { LocalDate.parse(it.logItem.diaryDate) }
     }
 
+    // --- 状态管理 ---
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
+    // 年/月选择器
     var isMonthPickerVisible by remember { mutableStateOf(false) }
     var pickerYear by remember { mutableStateOf(currentMonth.year) }
 
+    // 滑动手势
     var totalDrag by remember { mutableStateOf(0f) }
     val weekFields = WeekFields.of(DayOfWeek.SUNDAY, 1)
-
-    // --- [已删除] Pager 状态和 LaunchedEffect ---
 
 
     Column(
         Modifier
             .fillMaxSize()
             .pointerInput(isMonthPickerVisible, viewMode) {
-                // [已删除] 日视图 Pager 滑动检查
-
+                // 处理左右滑动手势
                 detectHorizontalDragGestures(
                     onDragStart = { totalDrag = 0f },
                     onHorizontalDrag = { change, dragAmount ->
@@ -80,11 +81,13 @@ fun HomeScreen(
                     onDragEnd = {
                         val swipeThreshold = 100
                         if (isMonthPickerVisible) {
+                            // 年份选择器
                             when {
                                 totalDrag < -swipeThreshold -> pickerYear++
                                 totalDrag > swipeThreshold -> pickerYear--
                             }
                         } else {
+                            // 日历视图
                             when (viewMode) {
                                 CalendarView.MONTH -> {
                                     when {
@@ -111,7 +114,6 @@ fun HomeScreen(
                                         currentMonth = YearMonth.from(newDate)
                                     }
                                 }
-                                // [已删除] THREE_DAY case
                             }
                         }
                     }
@@ -120,6 +122,7 @@ fun HomeScreen(
     ) {
 
         if (isMonthPickerVisible) {
+            // --- 年/月 选择器视图 ---
             YearPickerHeader(
                 year = pickerYear,
                 onPrevYear = { pickerYear-- },
@@ -127,19 +130,15 @@ fun HomeScreen(
                 onTitleClick = { isMonthPickerVisible = false }
             )
 
-            // --- [修改点 2: 日期选择器的逻辑] ---
             when(viewMode) {
-                CalendarView.MONTH -> { // [修改] 合并 MONTH 和 THREE_DAY
+                CalendarView.MONTH -> {
                     MonthPickerGrid(
                         pickerYear = pickerYear,
                         selectedMonthValue = if (pickerYear == currentMonth.year) currentMonth.monthValue else -1,
                         onMonthSelected = { monthValue ->
                             val newMonth = YearMonth.of(pickerYear, monthValue)
                             currentMonth = newMonth
-                            val newDate = newMonth.atDay(1)
-
-                            // [修改] 移除 Pager 滚动命令
-                            selectedDate = newDate
+                            selectedDate = newMonth.atDay(1)
                             isMonthPickerVisible = false
                         }
                     )
@@ -153,7 +152,6 @@ fun HomeScreen(
                                 .with(weekFields.weekOfYear(), weekNum.toLong())
                                 .with(weekFields.dayOfWeek(), 1)
 
-                            // (周视图：直接更新)
                             selectedDate = newDate
                             currentMonth = YearMonth.from(newDate)
                             isMonthPickerVisible = false
@@ -161,10 +159,9 @@ fun HomeScreen(
                     )
                 }
             }
-            // --- [修改点 2 结束] ---
 
         } else {
-            // --- [修改点 3: 顶部按钮的逻辑] ---
+            // --- 默认日历视图 ---
             CalendarHeader(
                 viewMode = viewMode,
                 currentMonth = currentMonth,
@@ -189,18 +186,19 @@ fun HomeScreen(
                 },
                 onTitleClick = {
                     pickerYear = when(viewMode) {
-                        CalendarView.WEEK -> selectedDate.year // [修改]
+                        CalendarView.WEEK -> selectedDate.year
                         CalendarView.MONTH -> currentMonth.year
                     }
                     isMonthPickerVisible = true
                 }
             )
-            // --- [修改点 3 结束] ---
 
+            // 显示 "日, 一, 二, ..."
             if (viewMode == CalendarView.MONTH || viewMode == CalendarView.WEEK) {
                 DaysOfWeekTitle()
             }
 
+            // 显示日历网格
             when (viewMode) {
                 CalendarView.MONTH -> {
                     CalendarGrid(

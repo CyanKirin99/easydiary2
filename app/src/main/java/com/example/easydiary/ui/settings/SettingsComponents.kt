@@ -13,7 +13,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 /**
- * L14/L19 的可重用单选项
+ * 可重用的设置单选项 (用于视图选择和主题选择)。
+ *
+ * @param label 选项显示的标签。
+ * @param isSelected 选项是否被选中。
+ * @param onClick 点击选项时的回调。
  */
 @Composable
 fun SettingsRadioItem(

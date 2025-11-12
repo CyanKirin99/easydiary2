@@ -1,10 +1,12 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/DiaryViewModel.kt
-// [已修复]: 方案F：修复导入/导出逻辑，使其支持图片文件的备份和恢复
-// [已修复]: (KSP 错误) 修复 exportHumanReadableCsv 中的 'item.id' 空指针问题
 package com.example.easydiary.ui
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -25,45 +27,41 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.time.LocalDate
-import java.util.regex.Pattern
+import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-import androidx.core.net.toUri
-import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.util.UUID
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Matrix
-import androidx.exifinterface.media.ExifInterface
-import java.io.InputStream
-import android.os.ParcelFileDescriptor
-import java.io.FileDescriptor
-
-// (UiStates 保持不变)
+/**
+ * 全局 UI 状态，主要包含应用范围内的配置，如日志类型。
+ */
 data class DiaryUiState(
     val selectedDate: LocalDate = LocalDate.now(),
     val logTypes: List<LogType> = emptyList()
 )
 
+/**
+ * [EntryScreen] 的临时编辑状态。
+ * 当用户进入编辑模式时，此状态会从数据库加载；保存时，此状态被写回数据库。
+ */
 data class EntryScreenState(
     val moodScore: Int = 2,
     val tomorrowPlans: List<String> = listOf(""),
-    val logData: Map<Long, LogData> = emptyMap(),
+    val logData: Map<Long, LogData> = emptyMap(), // Key: LogType ID
     val expandedLogTypeId: Long? = null
 ) {
     data class LogData(
@@ -79,17 +77,23 @@ class DiaryViewModel(
     private val appContext: Context
 ) : ViewModel() {
 
-    // ... (1. 到 5. 的所有状态和回调 保持不变) ...
+    // --- UI 状态 ---
 
-    // --- 1. 全局 UI 状态 ---
+    // 全局 UI 状态
     private val _uiState = MutableStateFlow(DiaryUiState())
     val uiState: StateFlow<DiaryUiState> = _uiState.asStateFlow()
-    // --- 2. EntryScreen 的 临时编辑状态 ---
+
+    // EntryScreen 的临时编辑状态
     private val _entryState = MutableStateFlow(EntryScreenState())
     val entryState: StateFlow<EntryScreenState> = _entryState.asStateFlow()
-    // --- 3. 设置 (Settings) Flow ---
+
+    // --- 数据流 (Flows) ---
+
+    // 应用设置
     val appTheme: Flow<AppTheme> = settingsRepository.appTheme
     val calendarView: Flow<CalendarView> = settingsRepository.calendarView
+
+    // 数据库数据
     val allEntries: StateFlow<List<DiaryEntry>> = repository.getAllDiaryEntries()
         .stateIn(
             scope = viewModelScope,
@@ -104,9 +108,11 @@ class DiaryViewModel(
         )
 
     init {
+        // 订阅 LogTypes 的变化，并更新 UI 状态
         repository.getLogTypes()
             .onEach { types ->
                 _uiState.update { it.copy(logTypes = types) }
+                // 确保 EntryState 也同步更新，以防 LogTypes 发生变化（例如用户在设置中修改）
                 _entryState.update { entryScreenState ->
                     val newLogData = types.associate {
                         it.id to (entryScreenState.logData[it.id] ?: EntryScreenState.LogData())
@@ -117,13 +123,20 @@ class DiaryViewModel(
             .launchIn(viewModelScope)
     }
 
-    // --- 4. EntryScreen 的数据加载和事件 ---
+    // --- EntryScreen 数据加载 ---
+
     fun getDiaryForDate(date: String): Flow<DiaryEntryWithDetails?> {
         return repository.getDiaryEntryWithDetails(date)
     }
+
+    /**
+     * 当进入编辑模式时，加载特定日期的数据到临时的 [entryState]。
+     */
     fun loadEntryForDate(details: DiaryEntryWithDetails?) {
         val defaultExpandedId = _uiState.value.logTypes.firstOrNull()?.id
+
         if (details == null) {
+            // 如果当天没有数据，则重置为默认空状态
             _entryState.update {
                 EntryScreenState(
                     logData = _uiState.value.logTypes.associate {
@@ -133,6 +146,7 @@ class DiaryViewModel(
                 )
             }
         } else {
+            // 如果有数据，则填充
             val newLogData = _uiState.value.logTypes.associate { logType ->
                 val logItem = details.logItems.find { it.logItem.logTypeId == logType.id }
                 logType.id to EntryScreenState.LogData(
@@ -152,13 +166,16 @@ class DiaryViewModel(
         }
     }
 
-    // --- 5. 所有 "状态提升" 的事件回调 ---
+    // --- EntryScreen 事件回调 (状态提升) ---
+
     fun onMoodChange(score: Int) {
         _entryState.update { it.copy(moodScore = score) }
     }
+
     fun onTomorrowPlanChange(texts: List<String>) {
         _entryState.update { it.copy(tomorrowPlans = texts) }
     }
+
     fun onLogTextsChange(logTypeId: Long, texts: List<String>) {
         val currentLogData = _entryState.value.logData[logTypeId] ?: EntryScreenState.LogData()
         _entryState.update {
@@ -167,6 +184,7 @@ class DiaryViewModel(
             )
         }
     }
+
     fun onLogDurationChange(logTypeId: Long, duration: Float) {
         val currentLogData = _entryState.value.logData[logTypeId] ?: EntryScreenState.LogData()
         _entryState.update {
@@ -175,6 +193,7 @@ class DiaryViewModel(
             )
         }
     }
+
     fun onMediaPathChange(logTypeId: Long, path: String?) {
         val currentLogData = _entryState.value.logData[logTypeId] ?: EntryScreenState.LogData()
         _entryState.update {
@@ -183,6 +202,7 @@ class DiaryViewModel(
             )
         }
     }
+
     fun onLogCardToggled(logTypeId: Long) {
         _entryState.update {
             if (it.expandedLogTypeId == logTypeId) {
@@ -194,26 +214,37 @@ class DiaryViewModel(
     }
 
 
-    // --- 6. (核心) 保存逻辑 (L10) ---
-    // (保持不变)
+    // --- 核心保存与删除 ---
+
+    /**
+     * 将临时的 [entryState] 保存到数据库。
+     */
     fun saveEntry(date: LocalDate) {
         viewModelScope.launch {
             val currentState = _entryState.value
             val dateString = date.toString()
+
+            // 1. 保存顶层 Entry
             val entry = DiaryEntry(
                 date = dateString,
                 moodScore = currentState.moodScore,
                 tomorrowPlan = currentState.tomorrowPlans.filter { it.isNotBlank() }.joinToString("\n")
             )
             repository.saveDiaryEntry(entry)
+
+            // 2. 遍历所有 LogTypes，保存对应的 LogItem 和 TextEntries
             for (logType in _uiState.value.logTypes) {
                 val logData = currentState.logData[logType.id] ?: continue
                 val texts = logData.texts.filter { it.isNotBlank() }
                 val duration = logData.duration
                 val mediaPath = logData.mediaPath
+
+                // 如果没有数据，则跳过
                 if (texts.isEmpty() && duration == 0f && mediaPath == null) {
                     continue
                 }
+
+                // 2a. 保存 LogItem
                 val logItemId = repository.saveLogItem(
                     LogItem(
                         diaryDate = dateString,
@@ -222,6 +253,8 @@ class DiaryViewModel(
                         mediaPath = if (logType.hasMedia) mediaPath else null
                     )
                 )
+
+                // 2b. 如果有文本，保存 TextEntries
                 if (logType.hasText) {
                     texts.forEachIndexed { index, content ->
                         repository.saveTextEntry(
@@ -237,18 +270,26 @@ class DiaryViewModel(
         }
     }
 
-    // (保持不变)
+    /**
+     * 删除指定日期的所有记录，并清理关联的媒体文件。
+     */
     fun deleteEntry(date: LocalDate) {
         viewModelScope.launch {
+            // 必须先获取详情，以便拿到媒体路径
             val details = getDiaryForDate(date.toString()).first()
+
+            // 删除数据库条目 (级联删除 LogItems 和 TextEntries)
             repository.deleteDiaryEntryByDate(date.toString())
+
+            // 删除关联的媒体文件
             details?.logItems?.forEach { logItemWithTexts ->
                 deleteMediaFile(logItemWithTexts.logItem.mediaPath)
             }
         }
     }
 
-    // --- 7. & 8. (设置逻辑 保持不变) ---
+    // --- 设置逻辑 ---
+
     fun updateLogTypes(updatedTypes: List<LogType>) {
         viewModelScope.launch {
             repository.updateLogTypes(updatedTypes)
@@ -265,9 +306,15 @@ class DiaryViewModel(
         }
     }
 
-    // --- [媒体处理逻辑 (方案E - 保持不变)] ---
-    // (copyMediaToInternal, resizeAndCompressImage, deleteMediaFile, handleMediaSelection 均保持不变)
+    // --- 媒体文件处理 ---
+
+    /**
+     * 接收来自媒体选择器 (ContentResolver) 的 Uri，将其复制到应用的内部存储。
+     * 复制过程中会进行压缩和旋转修正。
+     * @return 内部存储的绝对路径。
+     */
     private suspend fun copyMediaToInternal(uri: Uri): String? = withContext(Dispatchers.IO) {
+        // 1. 复制到临时文件
         val tempFile = File(appContext.cacheDir, "${UUID.randomUUID()}.tmp")
         try {
             appContext.contentResolver.openInputStream(uri)?.use { inputStream ->
@@ -280,11 +327,15 @@ class DiaryViewModel(
             tempFile.delete()
             return@withContext null
         }
+
+        // 2. 压缩和旋转修正
         val bitmap = resizeAndCompressImage(tempFile, 1080)
         if (bitmap == null) {
             tempFile.delete()
             return@withContext null
         }
+
+        // 3. 保存到内部存储的 "media" 目录
         val destFile = File(File(appContext.filesDir, "media").apply { mkdirs() }, "${UUID.randomUUID()}.jpg")
         try {
             FileOutputStream(destFile).use { outputStream ->
@@ -300,8 +351,13 @@ class DiaryViewModel(
             return@withContext null
         }
     }
+
+    /**
+     * 调整图片大小并根据 EXIF 信息修正旋转角度。
+     */
     private fun resizeAndCompressImage(file: File, maxPixelSize: Int): Bitmap? {
         try {
+            // 1. 仅解码边界以获取原始尺寸
             val options = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
             }
@@ -309,6 +365,8 @@ class DiaryViewModel(
             val srcWidth = options.outWidth
             val srcHeight = options.outHeight
             if (srcWidth <= 0 || srcHeight <= 0) return null
+
+            // 2. 计算采样率 (inSampleSize)
             var inSampleSize = 1
             if (srcHeight > maxPixelSize || srcWidth > maxPixelSize) {
                 val halfHeight = srcHeight / 2
@@ -317,6 +375,8 @@ class DiaryViewModel(
                     inSampleSize *= 2
                 }
             }
+
+            // 3. 读取 EXIF 旋转信息
             val exif = ExifInterface(file.absolutePath)
             val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
             val rotation = when (orientation) {
@@ -325,10 +385,14 @@ class DiaryViewModel(
                 ExifInterface.ORIENTATION_ROTATE_270 -> 270
                 else -> 0
             }
+
+            // 4. 实际解码位图
             options.inJustDecodeBounds = false
             options.inSampleSize = inSampleSize
             options.inPreferredConfig = Bitmap.Config.ARGB_8888
             var bitmap = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
+
+            // 5. 如果需要，应用旋转
             if (rotation != 0) {
                 val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
                 val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
@@ -343,11 +407,16 @@ class DiaryViewModel(
             return null
         }
     }
+
+    /**
+     * 从内部存储中删除指定的媒体文件。
+     */
     private suspend fun deleteMediaFile(path: String?) = withContext(Dispatchers.IO) {
         if (path == null) return@withContext
         try {
             val file = File(path)
             val mediaDir = File(appContext.filesDir, "media")
+            // 安全检查：确保只删除 "media" 目录下的文件
             if (file.exists() && file.absolutePath.startsWith(mediaDir.absolutePath)) {
                 file.delete()
             }
@@ -355,25 +424,36 @@ class DiaryViewModel(
             e.printStackTrace()
         }
     }
+
+    /**
+     * 处理来自 UI 的媒体选择事件（添加或删除）。
+     */
     fun handleMediaSelection(logTypeId: Long, uri: Uri?) {
         viewModelScope.launch {
             val oldPath = _entryState.value.logData[logTypeId]?.mediaPath
             var newPath: String? = null
+
             if (uri != null) {
+                // 如果是添加/替换，复制新文件
                 newPath = copyMediaToInternal(uri)
                 if (newPath == null) {
+                    // 复制失败，保持原状
                     return@launch
                 }
             }
+
+            // 如果路径发生变化 (新 -> 旧，旧 -> 空，或 新 -> 空)，删除旧文件
             if (oldPath != newPath) {
                 deleteMediaFile(oldPath)
             }
+
+            // 更新 UI 状态
             onMediaPathChange(logTypeId, newPath)
         }
     }
 
 
-    // --- [导入/导出 逻辑 (已修复图片备份)] ---
+    // --- 导入/导出 逻辑 ---
 
     private fun csvEscape(data: String?): String {
         if (data == null) return ""
@@ -452,6 +532,9 @@ class DiaryViewModel(
         }
     }
 
+    /**
+     * 导出所有数据（包括媒体文件）到 .zip 压缩包。
+     */
     suspend fun exportDataToZip(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
         try {
             val data = repository.getExportData()
@@ -464,8 +547,10 @@ class DiaryViewModel(
                 } else {
                     val file = File(logItem.mediaPath)
                     if (file.exists() && file.absolutePath.startsWith(mediaDir.absolutePath)) {
+                        // "media/filename.jpg"
                         logItem.copy(mediaPath = "media/${file.name}")
                     } else {
+                        // 路径无效，置空
                         logItem.copy(mediaPath = null)
                     }
                 }
@@ -496,7 +581,7 @@ class DiaryViewModel(
                     zipStream.write(csvTextEntries.toByteArray())
                     zipStream.closeEntry()
 
-                    // 4. 遍历原始数据，写入图片文件
+                    // 4. 遍历原始数据 (data.logItems)，写入图片文件
                     for (logItem in data.logItems.filter { it.mediaPath != null }) {
                         val file = File(logItem.mediaPath!!)
                         if (file.exists() && file.absolutePath.startsWith(mediaDir.absolutePath)) {
@@ -516,23 +601,30 @@ class DiaryViewModel(
         }
     }
 
+    /**
+     * 从 .zip 压缩包导入数据，返回 Result 以便 UI 显示成功或失败信息。
+     */
     suspend fun importDataFromZip(context: Context, uri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val csvMap = mutableMapOf<String, String>()
-            val newMediaPaths = mutableMapOf<String, String>()
+            val newMediaPaths = mutableMapOf<String, String>() // "media/old.jpg" -> "/data/data/.../media/new.jpg"
 
             val mediaDir = File(appContext.filesDir, "media").apply { mkdirs() }
+            // 清空旧媒体文件
             mediaDir.listFiles()?.forEach { it.delete() }
 
+            // 1. 解压 .zip
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 ZipInputStream(inputStream).use { zipStream ->
                     var entry = zipStream.nextEntry
                     while (entry != null) {
                         val entryName = entry.name
                         if (entryName.endsWith(".csv")) {
+                            // 1a. 读取 CSV 内容到内存
                             val content = zipStream.bufferedReader().readText()
                             csvMap[entryName] = content
                         } else if (entryName.startsWith("media/") && !entry.isDirectory) {
+                            // 1b. 解压媒体文件到内部存储
                             try {
                                 val fileName = File(entryName).name
                                 val destFile = File(mediaDir, fileName)
@@ -540,6 +632,7 @@ class DiaryViewModel(
                                 FileOutputStream(destFile).use { fileOutput ->
                                     zipStream.copyTo(fileOutput)
                                 }
+                                // 记录相对路径到绝对路径的映射
                                 newMediaPaths[entryName] = destFile.absolutePath
                             } catch (e: Exception) {
                                 e.printStackTrace()
@@ -551,13 +644,16 @@ class DiaryViewModel(
                 }
             }
 
+            // 2. 解析 CSV
             val entries = parseEntriesCsv(csvMap["diary_entries.csv"] ?: "")
             val logTypes = parseLogTypesCsv(csvMap["log_types.csv"] ?: "")
 
+            // 2a. 解析 LogItems，并转换媒体路径
             val logItems = csvMap["log_items.csv"]?.lines()?.drop(1)?.filter { it.isNotBlank() }?.map {
                 val parts = it.split(csvRegex, limit = 5)
 
                 val relativePath = if(parts[4].trim() == "null") null else parts[4].removeCsvQuotes().trim()
+                // 使用映射表查找新的绝对路径
                 val newAbsolutePath = relativePath?.let { newMediaPaths[it] }
 
                 LogItem(
@@ -565,10 +661,11 @@ class DiaryViewModel(
                     parts[1].removeCsvQuotes(),
                     parts[2].trim().toLong(),
                     if(parts[3].trim() == "null") null else parts[3].trim().toFloat(),
-                    newAbsolutePath
+                    newAbsolutePath // 使用新的路径
                 )
             } ?: emptyList()
 
+            // 2b. 解析 TextEntries
             val textEntries = csvMap["text_entries.csv"]?.lines()?.drop(1)?.filter { it.isNotBlank() }?.map {
                 val parts = it.split(csvRegex, limit = 4)
                 TextEntry(
@@ -583,6 +680,7 @@ class DiaryViewModel(
                 return@withContext Result.failure(Exception("文件为空或 'diary_entries.csv' / 'log_types.csv' 缺失"))
             }
 
+            // 3. 导入数据库
             repository.importData(ExportData(entries, logTypes, logItems, textEntries))
             Result.success(Unit)
         } catch (e: Exception) {
@@ -592,6 +690,9 @@ class DiaryViewModel(
     }
 
 
+    /**
+     * 导出人类可读的 CSV 文件（用于 Excel 等）。
+     */
     suspend fun exportHumanReadableCsv(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
         try {
             val data = repository.getExportData()
@@ -604,6 +705,7 @@ class DiaryViewModel(
 
             val sb = StringBuilder()
 
+            // 1. 构建表头
             val headers = mutableListOf("日期", "心情", "明日计划")
             for (logType in sortedLogTypes) {
                 if (logType.hasText) headers.add("${logType.name}-记录")
@@ -612,23 +714,23 @@ class DiaryViewModel(
             }
             sb.appendLine(headers.joinToString(",") { csvEscape(it) })
 
+            // 2. 遍历每一天
             for (entry in sortedEntries) {
                 val row = mutableListOf<String>()
 
                 row.add(csvEscape(entry.date))
-                row.add(csvEscape(entry.moodScore + 1))
+                row.add(csvEscape(entry.moodScore + 1)) // (转为 1-5)
                 row.add(csvEscape(entry.tomorrowPlan))
 
                 val dailyLogItems = logItemsMap[entry.date] ?: emptyList()
 
+                // 3. 遍历每种 LogType，填充对应数据
                 for (logType in sortedLogTypes) {
                     val item = dailyLogItems.find { it.logTypeId == logType.id }
 
                     if (logType.hasText) {
-                        // --- [编译错误修复点] ---
                         // 'item' 是 LogItem? (可空)，所以我们用 item?.id
                         val texts = (textEntriesMap[item?.id] ?: emptyList()).sortedBy { it.order }
-                        // --- [修复点结束] ---
                         val textContent = texts.joinToString("\n") { it.content }
                         row.add(csvEscape(textContent))
                     }
@@ -645,9 +747,10 @@ class DiaryViewModel(
                 sb.appendLine(row.joinToString(","))
             }
 
+            // 4. 写入文件 (带 BOM 头以便 Excel 正确识别 UTF-8)
             context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                 OutputStreamWriter(outputStream, Charsets.UTF_8).use { writer ->
-                    writer.write("\uFEFF")
+                    writer.write("\uFEFF") // BOM
                     writer.write(sb.toString())
                 }
             }
@@ -657,12 +760,10 @@ class DiaryViewModel(
             false
         }
     }
-    // --- [导入/导出 结束] ---
 }
-// --- 结束 ---
 
 
-// --- [Factory (保持不变)] ---
+// --- ViewModel Factory ---
 class DiaryViewModelFactory(
     private val repository: DiaryRepository,
     private val settingsRepository: SettingsRepository,

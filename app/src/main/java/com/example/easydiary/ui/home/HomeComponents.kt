@@ -1,4 +1,4 @@
-// 文件位置: app/src/main/java/com/example/easydiary/ui/home/HomeComponents.kt。
+// 文件位置: app/src/main/java/com/example/easydiary/ui/home/HomeComponents.kt
 package com.example.easydiary.ui.home
 
 
@@ -58,8 +58,8 @@ import java.util.Locale
 
 
 /**
- * 日历单元格 (改编自 V1)
- * (保持不变)
+ * 日历单元格 (月视图)。
+ * 显示日期数字和当天的心情 Emoji。
  */
 @Composable
 fun DayCell(
@@ -108,8 +108,8 @@ fun DayCell(
 
 
 /**
- * 顶部标头 (重构)
- * (保持不变)
+ * 日历顶部标头 (例如 "2025 年 11 月" 或 "2025 年 第 45 周")。
+ * 包含切换月份/周的按钮，点击标题可弹出选择器。
  */
 @Composable
 fun CalendarHeader(
@@ -176,8 +176,7 @@ fun CalendarHeader(
 
 
 /**
- * 顶部标头 (年份)
- * (保持不变)
+ * 年份选择器标头 (例如 "2025 年")。
  */
 @Composable
 fun YearPickerHeader(
@@ -221,8 +220,7 @@ fun YearPickerHeader(
 
 
 /**
- * 星期标题 (来自 V1)
- * (保持不变)
+ * 星期标题 (日, 一, 二, ..., 六)。
  */
 @Composable
 fun DaysOfWeekTitle() {
@@ -242,8 +240,7 @@ fun DaysOfWeekTitle() {
 }
 
 /**
- * 日历网格 (改编自 V1)
- * (保持不变)
+ * 月视图的日历网格 (7列)。
  */
 @Composable
 fun CalendarGrid(
@@ -253,9 +250,10 @@ fun CalendarGrid(
     onDateClick: (LocalDate) -> Unit
 ) {
     val firstDayOfMonth = currentMonth.atDay(1)
-    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7
+    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // 周日(0) ... 周六(6)
     val daysInMonth = currentMonth.lengthOfMonth()
 
+    // 填充网格数据，空白处用 null
     val calendarDays = mutableListOf<LocalDate?>()
     repeat(firstDayOfWeek) { calendarDays.add(null) }
     for (day in 1..daysInMonth) {
@@ -268,6 +266,7 @@ fun CalendarGrid(
     ) {
         items(calendarDays) { date ->
             if (date == null) {
+                // 空白单元格
                 Box(Modifier.padding(4.dp).aspectRatio(0.75f))
             } else {
                 DayCell(
@@ -284,8 +283,7 @@ fun CalendarGrid(
 
 
 /**
- * 月份选择网格
- * (保持不变)
+ * 月份选择网格 (一月, 二月, ...)。
  */
 @Composable
 fun MonthPickerGrid(
@@ -316,8 +314,7 @@ fun MonthPickerGrid(
 }
 
 /**
- * 月份单元格
- * (保持不变)
+ * 月份选择单元格。
  */
 @Composable
 private fun MonthCell(
@@ -349,55 +346,10 @@ private fun MonthCell(
 }
 
 
-// --- [辅助函数] ---
+// --- 周视图相关组件 ---
 
 /**
- * (辅助函数) 获取一周的日期 (周日-周六)
- * (保持不变)
- */
-private fun getWeekDays(date: LocalDate): List<LocalDate> {
-    var current = date
-    while (current.dayOfWeek.value % 7 != 0) {
-        current = current.minusDays(1)
-    }
-    return List(7) { current.plusDays(it.toLong()) }
-}
-
-/**
- * (辅助函数) 获取周的开始和结束日期
- * (保持不变)
- */
-private fun findWeekRange(date: LocalDate): Pair<LocalDate, LocalDate> {
-    val weekDays = getWeekDays(date)
-    return Pair(weekDays.first(), weekDays.last())
-}
-
-/**
- * (辅助函数) 获取一年中的所有周 (作为 Pair<周数, 该周第一天>)
- * (保持不变)
- */
-private fun getWeeksInYear(year: Int, weekFields: WeekFields): List<Pair<Int, LocalDate>> {
-    val weeks = mutableListOf<Pair<Int, LocalDate>>()
-    var date = LocalDate.of(year, 1, 1).with(weekFields.dayOfWeek(), 1) // 当年第一周的周日
-
-    if (date.year < year) {
-        date = date.plusWeeks(1)
-    }
-
-    var weekNum = date.get(weekFields.weekOfYear())
-
-    while(date.year == year) {
-        weeks.add(Pair(weekNum, date))
-        date = date.plusWeeks(1)
-        weekNum = date.get(weekFields.weekOfYear())
-        if (weekNum == 1 && weeks.size > 50) break
-    }
-    return weeks
-}
-
-/**
- * 周视图网格
- * (保持不变)
+ * 周视图选择网格 (第 1 周, 第 2 周, ...)。
  */
 @Composable
 fun WeekPickerGrid(
@@ -429,8 +381,7 @@ fun WeekPickerGrid(
 }
 
 /**
- * 周单元格
- * (保持不变)
+ * 周选择单元格。
  */
 @Composable
 private fun WeekCell(
@@ -475,10 +426,8 @@ private fun WeekCell(
     }
 }
 
-
 /**
- * 周视图卡片 (长条形)
- * (Locale 修复)
+ * 周视图中的单日卡片 (长条形)。
  */
 @Composable
 fun WeekDayCard(
@@ -490,7 +439,6 @@ fun WeekDayCard(
     onClick: () -> Unit
 ) {
     val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
-    // [修改点 3] 修复 Locale Bug
     val dayName = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.SIMPLIFIED_CHINESE)
 
     val firstLogSnippet = remember(logs) {
@@ -567,8 +515,7 @@ fun WeekDayCard(
 
 
 /**
- * 周视图网格
- * (保持不变)
+ * 周视图网格 (1列)，显示 [WeekDayCard] 列表。
  */
 @Composable
 fun WeekViewGrid(
@@ -596,4 +543,40 @@ fun WeekViewGrid(
             )
         }
     }
+}
+
+// --- 辅助函数 ---
+
+/**
+ * (辅助函数) 获取指定日期所在周的所有日期 (周日-周六)。
+ */
+private fun getWeekDays(date: LocalDate): List<LocalDate> {
+    var current = date
+    // 回溯到周日 (dayOfWeek.value % 7 == 0)
+    while (current.dayOfWeek.value % 7 != 0) {
+        current = current.minusDays(1)
+    }
+    return List(7) { current.plusDays(it.toLong()) }
+}
+
+/**
+ * (辅助函数) 获取一年中的所有周 (作为 Pair<周数, 该周第一天>)。
+ */
+private fun getWeeksInYear(year: Int, weekFields: WeekFields): List<Pair<Int, LocalDate>> {
+    val weeks = mutableListOf<Pair<Int, LocalDate>>()
+    var date = LocalDate.of(year, 1, 1).with(weekFields.dayOfWeek(), 1) // 当年第一周的周日
+
+    if (date.year < year) {
+        date = date.plusWeeks(1)
+    }
+
+    var weekNum = date.get(weekFields.weekOfYear())
+
+    while(date.year == year) {
+        weeks.add(Pair(weekNum, date))
+        date = date.plusWeeks(1)
+        weekNum = date.get(weekFields.weekOfYear())
+        if (weekNum == 1 && weeks.size > 50) break // 避免跨年周
+    }
+    return weeks
 }
