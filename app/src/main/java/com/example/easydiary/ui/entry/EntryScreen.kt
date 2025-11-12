@@ -1,9 +1,4 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/entry/EntryScreen.kt
-// [已修改]: 1. 导入 Uri。
-// [已修改]: 2. EditModeContent 调用 handleMediaSelection。
-// [已修改]: 3. 移除 ViewMood, ViewLogCard, ViewTextCard (已移至 EntryComponents.kt)。
-// [已修改]: 4. 导入 ViewMood, ViewLogCard, ViewTextCard。
-
 package com.example.easydiary.ui.entry
 
 import androidx.compose.animation.AnimatedVisibility
@@ -42,12 +37,21 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.ui.graphics.Color
-// [修改点 4] 导入移动的组件
+// 导入从 EntryComponents.kt 移入的组件
 import com.example.easydiary.ui.entry.ViewLogCard
 import com.example.easydiary.ui.entry.ViewMood
 import com.example.easydiary.ui.entry.ViewTextCard
 
 
+/**
+ * 日记条目屏幕 (EntryScreen)。
+ * 负责显示、编辑和删除特定日期的日记。
+ *
+ * @param viewModel DiaryViewModel
+ * @param selectedDate 当前显示的日期
+ * @param onBack 返回上一页（主屏幕）
+ * @param onDateChange 当用户左右滑动切换日期时调用
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EntryScreen(
@@ -56,7 +60,6 @@ fun EntryScreen(
     onBack: () -> Unit,
     onDateChange: (LocalDate) -> Unit
 ) {
-    // ... (EntryScreen 顶部 保持不变) ...
     val diaryDetails by viewModel.getDiaryForDate(selectedDate.toString())
         .collectAsState(initial = null)
 
@@ -68,6 +71,7 @@ fun EntryScreen(
         mutableStateOf(false)
     }
 
+    // 当切换到编辑模式时，从 ViewModel 加载数据到临时状态
     LaunchedEffect(isEditing, diaryDetails, logTypes) {
         if (isEditing && logTypes.isNotEmpty()) {
             viewModel.loadEntryForDate(diaryDetails)
@@ -76,19 +80,22 @@ fun EntryScreen(
 
     var showDeleteDialog by remember { mutableStateOf(false) }
 
+    // 左右滑动手势
     var totalDrag by remember { mutableStateOf(0f) }
 
+    // 在编辑模式下，按返回键应退出编辑模式，而不是返回主页
     BackHandler(enabled = isEditing) {
         isEditing = false
     }
 
     Scaffold(
         modifier = Modifier.pointerInput(isEditing, selectedDate) {
-            if (isEditing) return@pointerInput // 仅在查看模式下启用
+            if (isEditing) return@pointerInput // 仅在查看模式下启用滑动切换日期
 
             detectHorizontalDragGestures(
                 onDragStart = { totalDrag = 0f },
                 onHorizontalDrag = { change, dragAmount ->
+                    // 优先响应水平滑动
                     if (kotlin.math.abs(dragAmount) > kotlin.math.abs(change.previousPosition.y - change.position.y)) {
                         change.consume()
                     }
@@ -123,6 +130,7 @@ fun EntryScreen(
                 },
                 actions = {
                     if (isEditing) {
+                        // 编辑模式：显示保存
                         IconButton(onClick = {
                             viewModel.saveEntry(selectedDate)
                             isEditing = false
@@ -130,9 +138,10 @@ fun EntryScreen(
                             Icon(Icons.Default.Check, "保存")
                         }
                     } else {
+                        // 查看模式：显示删除和编辑
                         IconButton(
                             onClick = { showDeleteDialog = true },
-                            enabled = diaryDetails != null
+                            enabled = diaryDetails != null // 只有在有数据时才能删除
                         ) {
                             Icon(Icons.Default.Delete, "删除")
                         }
@@ -147,6 +156,7 @@ fun EntryScreen(
         }
     ) { paddingValues ->
 
+        // 删除确认对话框
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
@@ -157,7 +167,7 @@ fun EntryScreen(
                         onClick = {
                             viewModel.deleteEntry(selectedDate)
                             showDeleteDialog = false
-                            onBack()
+                            onBack() // 删除后返回主页
                         }
                     ) { Text("删除") }
                 },
@@ -167,6 +177,7 @@ fun EntryScreen(
             )
         }
 
+        // 根据模式显示不同内容
         if (isEditing) {
             EditModeContent(
                 modifier = Modifier.padding(paddingValues),
@@ -186,7 +197,10 @@ fun EntryScreen(
 }
 
 
-// --- [修改点 2: EditModeContent] ---
+/**
+ * 编辑模式下的内容。
+ * 显示 [DynamicLogCard], [MoodSelector], [TomorrowPlanInput] 等可编辑组件。
+ */
 @Composable
 fun EditModeContent(
     modifier: Modifier = Modifier,
@@ -199,6 +213,7 @@ fun EditModeContent(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // 动态日志卡片
         items(logTypes) { logType ->
             val logData = entryState.logData[logType.id] ?: EntryScreenState.LogData()
             DynamicLogCard(
@@ -208,11 +223,11 @@ fun EditModeContent(
                 onToggleExpand = { viewModel.onLogCardToggled(logType.id) },
                 onTextsChange = { viewModel.onLogTextsChange(logType.id, it) },
                 onDurationChange = { viewModel.onLogDurationChange(logType.id, it) },
-                // onMediaPathChange = { path -> viewModel.onMediaPathChange(logType.id, path) } // (移除)
-                onMediaChangeRequest = { uri -> viewModel.handleMediaSelection(logType.id, uri) } // (修改)
+                onMediaChangeRequest = { uri -> viewModel.handleMediaSelection(logType.id, uri) }
             )
         }
 
+        // 心情选择器
         item {
             MoodSelector(
                 selectedScore = entryState.moodScore,
@@ -220,6 +235,7 @@ fun EditModeContent(
             )
         }
 
+        // 明日计划
         item {
             TomorrowPlanInput(
                 texts = entryState.tomorrowPlans,
@@ -228,9 +244,11 @@ fun EditModeContent(
         }
     }
 }
-// --- [修改点 2 结束] ---
 
-// --- (新) 查看模式 (已实现) ---
+/**
+ * 查看模式下的内容。
+ * 显示只读的 [ViewMood], [ViewLogCard], [ViewTextCard] 组件。
+ */
 @Composable
 fun ViewModeContent(
     modifier: Modifier = Modifier,
@@ -239,6 +257,7 @@ fun ViewModeContent(
     onStartEdit: () -> Unit
 ) {
     if (diaryDetails == null || diaryDetails.entry == null) {
+        // 当天无数据
         Box(
             modifier = modifier.fillMaxSize().padding(16.dp),
             contentAlignment = Alignment.Center
@@ -261,6 +280,7 @@ fun ViewModeContent(
         return
     }
 
+    // 显示当天的日记详情
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
@@ -280,7 +300,7 @@ fun ViewModeContent(
             )
         }
 
-        // 3. 明日计划 (U7)
+        // 3. 明日计划
         if (!diaryDetails.entry.tomorrowPlan.isNullOrBlank()) {
             item {
                 ViewTextCard(
@@ -291,7 +311,3 @@ fun ViewModeContent(
         }
     }
 }
-
-// --- [修改点 3: 移除 ViewMood, ViewLogCard, ViewTextCard] ---
-// (这些组件已移至 EntryComponents.kt)
-// --- [修改点 3 结束] ---

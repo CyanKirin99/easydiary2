@@ -3,8 +3,9 @@ package com.example.easydiary.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// V2.0 温暖日系 (MUJI 风格)
-// 灵感: 米色、暖灰、赤陶色
+// 应用配色方案 (V2.0)
+// 风格：温暖日系 (MUJI 风格)
+// 灵感：米色、暖灰、赤陶色
 
 // 浅色模式
 val LightBackground = Color(0xFFFBFBFB) // 极浅的米白色背景
@@ -24,6 +25,6 @@ val DarkOnPrimary = Color(0xFF403D3B) // 主色调上的文字
 val DarkOnSurface = Color(0xFFECEAE8) // 表面上的文字 (浅灰)
 val DarkSurfaceVariant = Color(0xFF4F4D4A) // 表面变体 - 稍深的灰色 (用于输入框背景)
 
-// (*** 修复: 重新添加 V1 的图表颜色 ***)
-val ChartMood = Color(0xFF00C853) // 绿色
-val ChartWork = Color(0xFFFFAB00) // 琥珀色
+// 统计图表颜色 (沿用 V1)
+val ChartMood = Color(0xFF00C853) // 绿色 (心情)
+val ChartWork = Color(0xFFFFAB00) // 琥珀色 (时长)

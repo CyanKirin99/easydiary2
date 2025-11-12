@@ -3,10 +3,13 @@ package com.example.easydiary.data.model
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
-import androidx.room.Index // (*** 新增 ***)
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-// V2.0 实体 3: 具体的日志条目 (如 "2025-11-09 的 学习")
+/**
+ * 数据库实体：具体的日志条目。
+ * 关联一个 [DiaryEntry] (通过日期) 和一个 [LogType] (通过ID)。
+ */
 @Entity(
     tableName = "log_items",
     foreignKeys = [
@@ -23,7 +26,7 @@ import androidx.room.PrimaryKey
             onDelete = ForeignKey.CASCADE
         )
     ],
-    // (*** 新增: KSP 警告修复 ***)
+    // 为外键添加索引以优化查询性能
     indices = [
         Index(value = ["diaryDate"]),
         Index(value = ["logTypeId"])
@@ -34,6 +37,6 @@ data class LogItem(
     val id: Long = 0,
     val diaryDate: String, // 外键: 关联 DiaryEntry
     val logTypeId: Long, // 外键: 关联 LogType
-    val duration: Float? = null, // L10: 时长
-    val mediaPath: String? = null // L11: 媒体文件路径
+    val duration: Float? = null, // 时长
+    val mediaPath: String? = null // 媒体文件路径
 )

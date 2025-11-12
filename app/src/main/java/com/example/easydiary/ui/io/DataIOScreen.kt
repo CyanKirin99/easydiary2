@@ -30,6 +30,10 @@ import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
+/**
+ * “数据管理”屏幕。
+ * 负责处理数据导出 (CSV, Zip) 和导入 (Zip)。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DataIOScreen(
@@ -39,14 +43,16 @@ fun DataIOScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isLoading by remember { mutableStateOf(false) }
+
+    // 导入确认弹窗
     var showImportConfirm by remember { mutableStateOf(false) }
     var importUriToProcess by remember { mutableStateOf<android.net.Uri?>(null) }
 
-    // [修改点 1] 新增：用于显示导入结果的弹窗状态
+    // 导入结果（成功或失败）弹窗
     var importResultDialogMessage by remember { mutableStateOf<String?>(null) }
 
 
-    // (导出 CSV 启动器 保持不变)
+    // 导出 CSV (人类可读) 启动器
     val exportCsvLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/csv"),
         onResult = { uri ->
@@ -65,7 +71,7 @@ fun DataIOScreen(
         }
     )
 
-    // (导出 .zip 启动器 保持不变)
+    // 导出 .zip (备份) 启动器
     val exportZipLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip"),
         onResult = { uri ->
@@ -84,18 +90,18 @@ fun DataIOScreen(
         }
     )
 
-    // (导入 .zip 启动器 保持不变)
+    // 导入 .zip (恢复) 启动器
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri ->
             if (uri != null) {
                 importUriToProcess = uri
-                showImportConfirm = true
+                showImportConfirm = true // 弹出确认对话框
             }
         }
     )
 
-    // (原) 导入确认弹窗
+    // 导入确认弹窗 (警告用户覆盖数据)
     if (showImportConfirm && importUriToProcess != null) {
         AlertDialog(
             onDismissRequest = {
@@ -111,12 +117,12 @@ fun DataIOScreen(
                         isLoading = true
                         showImportConfirm = false
                         scope.launch {
-                            // [修改点 2] 调用新的返回 Result 的函数
+                            // 调用 ViewModel 执行导入
                             val result = viewModel.importDataFromZip(context, importUriToProcess!!)
                             isLoading = false
                             importUriToProcess = null
 
-                            // [修改点 3] 检查 Result.fold
+                            // 检查导入结果 (Result.fold)
                             result.fold(
                                 onSuccess = {
                                     // 成功时，设置成功消息
@@ -140,7 +146,7 @@ fun DataIOScreen(
         )
     }
 
-    // [修改点 4] 新增：用于显示导入结果（成功或失败）的弹窗
+    // 导入结果弹窗 (显示成功或失败)
     if (importResultDialogMessage != null) {
         AlertDialog(
             onDismissRequest = { importResultDialogMessage = null },
@@ -177,6 +183,7 @@ fun DataIOScreen(
         ) {
 
             if (isLoading) {
+                // 加载指示器
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -187,7 +194,7 @@ fun DataIOScreen(
                 }
             } else {
 
-                // (导出CSV 按钮 保持不变)
+                // 导出CSV 按钮
                 Button(
                     onClick = {
                         val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
@@ -205,7 +212,7 @@ fun DataIOScreen(
                     modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
                 )
 
-                // (创建备份 按钮 保持不变)
+                // 创建备份 按钮
                 Button(
                     onClick = {
                         val formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
@@ -224,7 +231,7 @@ fun DataIOScreen(
                     modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
                 )
 
-                // (导入备份 按钮 保持不变)
+                // 导入备份 按钮
                 Button(
                     onClick = { importLauncher.launch("application/zip") },
                     modifier = Modifier.fillMaxWidth(),
@@ -241,7 +248,7 @@ fun DataIOScreen(
 
                 Spacer(Modifier.height(32.dp))
 
-                // (模板说明 保持不变)
+                // 备份文件说明
                 Text("备份文件说明 (Logic#18)", style = MaterialTheme.typography.titleMedium)
                 Text(
                     ".zip 压缩包格式，内部包含 4 个 CSV 文件：" +

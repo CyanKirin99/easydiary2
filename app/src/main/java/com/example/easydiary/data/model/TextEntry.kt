@@ -3,10 +3,13 @@ package com.example.easydiary.data.model
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
-import androidx.room.Index // (*** 新增 ***)
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-// V2.0 实体 4: 具体的文本条目 (L9)
+/**
+ * 数据库实体：具体的文本条目。
+ * 允许一个 [LogItem] 包含多个文本段落。
+ */
 @Entity(
     tableName = "text_entries",
     foreignKeys = [
@@ -17,7 +20,7 @@ import androidx.room.PrimaryKey
             onDelete = ForeignKey.CASCADE
         )
     ],
-    // (*** 新增: KSP 警告修复 ***)
+    // 为外键添加索引以优化查询性能
     indices = [
         Index(value = ["logItemId"])
     ]

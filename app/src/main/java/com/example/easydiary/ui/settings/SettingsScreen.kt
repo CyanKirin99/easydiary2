@@ -1,5 +1,4 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/settings/SettingsScreen.kt
-// [已修改]: 合并导入/导出条目为"数据管理"
 package com.example.easydiary.ui.settings
 
 import androidx.compose.foundation.clickable
@@ -24,10 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.example.easydiary.ui.Screen
-// --- [新增导入] ---
 import androidx.compose.material.icons.filled.Storage
-// --- [新增导入 结束] ---
 
+/**
+ * "我的" 屏幕，作为所有设置页面的主入口。
+ *
+ * @param onNavigate 用于导航到指定路由 (Screen.route) 的回调。
+ */
 @Composable
 fun SettingsScreen(
     onNavigate: (String) -> Unit
@@ -41,6 +43,7 @@ fun SettingsScreen(
             )
         }
 
+        // 应用设置
         item {
             SettingsItem(
                 icon = Icons.Default.Edit,
@@ -70,6 +73,7 @@ fun SettingsScreen(
             Divider(Modifier.padding(vertical = 8.dp))
         }
 
+        // 统计
         item {
             SettingsItem(
                 icon = Icons.Default.BarChart,
@@ -83,19 +87,21 @@ fun SettingsScreen(
             Divider(Modifier.padding(vertical = 8.dp))
         }
 
-        // --- [修改点: 合并] ---
+        // 数据管理
         item {
             SettingsItem(
-                icon = Icons.Default.Storage, // 使用新图标
+                icon = Icons.Default.Storage,
                 title = "数据管理",
                 subtitle = "备份、恢复或导出数据",
                 onClick = { onNavigate(Screen.DataIO.route) }
             )
         }
-        // --- [修改点 结束] ---
     }
 }
 
+/**
+ * 设置页面中可点击的列表项。
+ */
 @Composable
 private fun SettingsItem(
     icon: ImageVector,

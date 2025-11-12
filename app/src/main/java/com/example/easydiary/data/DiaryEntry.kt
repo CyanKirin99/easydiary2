@@ -5,7 +5,9 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import java.time.LocalDate
 
-// V2.0 实体 1: 每日的顶层条目
+/**
+ * 数据库实体：每日的顶层条目，包含心情和明日计划。
+ */
 @Entity(tableName = "diary_entries")
 data class DiaryEntry(
     @PrimaryKey

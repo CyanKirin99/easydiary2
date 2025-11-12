@@ -1,5 +1,4 @@
 // 文件位置: app/src/main/java/com/example/easydiary/MainActivity.kt
-// [已修改]: 注入 Application Context 到 ViewModelFactory
 package com.example.easydiary
 
 import android.app.Application
@@ -25,21 +24,26 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-// V2 Application - 持有 V2 的数据库和 Repository
+/**
+ * 自定义 Application 类，用于持有和惰性初始化应用级的单例，
+ * 如数据库 (Database)、仓库 (Repository) 和 ViewModelFactory。
+ */
 class EasyDiaryApplication : Application() {
     val applicationScope = CoroutineScope(SupervisorJob())
 
+    // 惰性初始化数据库
     val database by lazy { DiaryDatabase.getDatabase(this, applicationScope) }
-    // (*** 1. 修正: 传入 database 实例 ***)
+
+    // 惰性初始化仓库，并传入 database 实例
     val repository by lazy { DiaryRepository(database.diaryDao(), database) }
 
+    // 惰性初始化设置仓库
     val settingsRepository by lazy { SettingsRepository(this) }
 
-    // --- [修改点: 注入 Application Context] ---
+    // 惰性初始化 ViewModelFactory，注入依赖
     val viewModelFactory by lazy {
         DiaryViewModelFactory(repository, settingsRepository, this)
     }
-    // --- [修改点 结束] ---
 }
 
 
@@ -49,10 +53,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
+            // 从 Application 获取 ViewModelFactory 来创建 ViewModel
             val viewModel: DiaryViewModel = viewModel(
                 factory = (application as EasyDiaryApplication).viewModelFactory
             )
 
+            // 订阅主题设置
             val appTheme by viewModel.appTheme.collectAsState(initial = AppTheme.SYSTEM)
             val useDarkTheme = when (appTheme) {
                 AppTheme.SYSTEM -> isSystemInDarkTheme()
@@ -65,7 +71,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation(viewModel = viewModel, onFinish = { finish() })
+                    AppNavigation(
+                        viewModel = viewModel,
+                        onFinish = { finish() } // 传入退出应用的回调
+                    )
                 }
             }
         }

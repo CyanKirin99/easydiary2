@@ -1,9 +1,4 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/entry/EntryComponents.kt
-// [已修改]: 1. MediaPicker 使用 handleMediaSelection 修复图片丢失Bug。
-// [已修改]: 2. 添加 FullScreenImageViewer 以实现真正的"点击放大"。
-// [已修改]: 3. MediaPicker 和 ViewLogCard 使用 FullScreenImageViewer。
-// [已修改]: 4. 从 EntryScreen.kt 移入 ViewMood, ViewLogCard, ViewTextCard。
-
 package com.example.easydiary.ui.entry
 
 import android.net.Uri
@@ -45,7 +40,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.easydiary.data.model.LogItemWithTexts
 
-// (MoodSelector 保持不变)
+/**
+ * 心情选择器 (编辑模式)。
+ */
 @Composable
 fun MoodSelector(
     selectedScore: Int,
@@ -89,7 +86,9 @@ fun MoodSelector(
     }
 }
 
-// (TomorrowPlanInput 保持不变)
+/**
+ * 明日计划输入框 (编辑模式)。
+ */
 @Composable
 fun TomorrowPlanInput(
     texts: List<String>,
@@ -111,7 +110,10 @@ fun TomorrowPlanInput(
     }
 }
 
-// --- [修改点 1: DynamicLogCard] ---
+/**
+ * 动态日志卡片 (编辑模式)。
+ * 根据 [LogType] 的定义 (hasText, hasDuration, hasMedia) 显示不同的输入控件。
+ */
 @Composable
 fun DynamicLogCard(
     logType: LogType,
@@ -120,20 +122,21 @@ fun DynamicLogCard(
     onToggleExpand: () -> Unit,
     onTextsChange: (List<String>) -> Unit,
     onDurationChange: (Float) -> Unit,
-    // onMediaPathChange: (String?) -> Unit, // (移除)
-    onMediaChangeRequest: (Uri?) -> Unit // (新增)
+    onMediaChangeRequest: (Uri?) -> Unit // 当用户选择或删除媒体时回调
 ) {
     Card(
         elevation = CardDefaults.cardElevation(0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(Modifier.padding(16.dp)) {
+            // 标题（始终可见，点击可展开/折叠）
             Text(
                 text = logType.name,
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.fillMaxWidth().clickable { onToggleExpand() }
             )
 
+            // 可折叠内容
             if (isExpanded) {
                 Spacer(Modifier.height(16.dp))
                 if (logType.hasText) {
@@ -152,17 +155,18 @@ fun DynamicLogCard(
                 if (logType.hasMedia) {
                     MediaPicker(
                         mediaPath = logData.mediaPath,
-                        // onMediaPathChange = onMediaPathChange // (移除)
-                        onMediaChangeRequest = onMediaChangeRequest // (新增)
+                        onMediaChangeRequest = onMediaChangeRequest
                     )
                 }
             }
         }
     }
 }
-// --- [修改点 1 结束] ---
 
-// (TextEntryList 保持不变)
+/**
+ * 可动态添加的文本输入框列表 (编辑模式)。
+ * 用于 [DynamicLogCard] 和 [TomorrowPlanInput]。
+ */
 @Composable
 fun TextEntryList(
     texts: List<String>,
@@ -170,6 +174,7 @@ fun TextEntryList(
     placeholder: String
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 显示已有的文本行 (除了最后一行)
         texts.forEachIndexed { index, text ->
             if (index < texts.lastIndex) {
                 OutlinedTextField(
@@ -184,6 +189,8 @@ fun TextEntryList(
                 )
             }
         }
+
+        // 最后一个输入框 (用于输入和添加新行)
         OutlinedTextField(
             value = texts.last(),
             onValueChange = { newText ->
@@ -195,12 +202,14 @@ fun TextEntryList(
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
+                // 按下 "完成" 且当前行不为空时，自动添加新行
                 val currentText = texts.last()
                 if (currentText.isNotBlank()) {
                     onTextsChange(texts + "")
                 }
             }),
             trailingIcon = {
+                // 点击 "+" 按钮添加新行
                 IconButton(onClick = {
                     val currentText = texts.last()
                     if (currentText.isNotBlank()) {
@@ -214,7 +223,9 @@ fun TextEntryList(
     }
 }
 
-// (DurationSlider 保持不变)
+/**
+ * 时长选择滑块 (编辑模式)。
+ */
 @Composable
 fun DurationSlider(
     duration: Float,
@@ -224,71 +235,66 @@ fun DurationSlider(
         Text("时长: ${"%.1f".format(duration)} 小时", style = MaterialTheme.typography.bodyMedium)
         Slider(
             value = duration,
-            onValueChange = { onDurationChange((it * 2).roundToInt() / 2.0f) },
+            onValueChange = { onDurationChange((it * 2).roundToInt() / 2.0f) }, // 步长 0.5
             valueRange = 0f..12f,
             steps = 23
         )
     }
 }
 
-// --- [修改点 2: MediaPicker] ---
+/**
+ * 媒体（图片）选择器 (编辑模式)。
+ */
 @Composable
 fun MediaPicker(
     mediaPath: String?,
-    // onMediaPathChange: (String?) -> Unit, // (移除)
-    onMediaChangeRequest: (Uri?) -> Unit // (新增)
+    onMediaChangeRequest: (Uri?) -> Unit
 ) {
     val context = LocalContext.current
 
-    // 1. 准备图片选择器 (保持 "image/*")
+    // 1. 准备图片选择器 (仅限图片)
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        // onMediaPathChange(uri?.toString()) // (移除)
-        onMediaChangeRequest(uri) // (新增)
+        onMediaChangeRequest(uri) // 将选择的 Uri 回调给 ViewModel
     }
 
-    // 2. 移除 isImageExpanded, heightModifier, imageScale
-    var showFullScreen by remember { mutableStateOf(false) } // (新增)
+    var showFullScreen by remember { mutableStateOf(false) }
 
     Column(Modifier.padding(top = 8.dp)) {
         if (mediaPath == null) {
-            // 4. 如果没有图片，显示添加按钮 (保持 "image/*")
+            // 2. 如果没有图片，显示添加按钮
             Button(
                 onClick = {
-                    launcher.launch("image/*") // <-- 保持仅图片
+                    launcher.launch("image/*")
                 }
             ) {
                 Icon(Icons.Default.AddAPhoto, "添加媒体", modifier = Modifier.padding(end = 8.dp))
                 Text("添加图片")
             }
         } else {
-            // 5. 如果有图片，显示预览和按钮
+            // 3. 如果有图片，显示预览图
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp) // (修改) 始终固定高度
+                    .height(180.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surface)
-                    .clickable { showFullScreen = true } // (修改) 点击打开弹窗
+                    .clickable { showFullScreen = true } // 点击打开全屏
             ) {
                 AsyncImage(
                     model = mediaPath,
                     contentDescription = "选择的图片",
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop // (修改) 始终裁剪
+                    contentScale = ContentScale.Crop
                 )
 
-                // 6. 将两个按钮放在右上角
+                // 移除按钮 (右上角)
                 Row(modifier = Modifier.align(Alignment.TopEnd)) {
-                    // (移除 AspectRatio 按钮)
-
-                    // 移除按钮
                     IconButton(
-                        // onClick = { onMediaPathChange(null) }, // (移除)
-                        onClick = { onMediaChangeRequest(null) }, // (新增)
+                        onClick = { onMediaChangeRequest(null) }, // 传递 null Uri 表示删除
                         modifier = Modifier
-                            .padding(8.dp) // (修改) 调整内边距
+                            .padding(8.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
                     ) {
@@ -297,7 +303,7 @@ fun MediaPicker(
                 }
             }
 
-            // (新增) 弹窗
+            // 4. 全屏查看器
             if (showFullScreen && mediaPath != null) {
                 FullScreenImageViewer(
                     path = mediaPath,
@@ -307,11 +313,13 @@ fun MediaPicker(
         }
     }
 }
-// --- [修改点 2 结束] ---
 
 
-// --- [新增: 从 EntryScreen.kt 移入的组件] ---
+// --- 以下是只读组件 (查看模式) ---
 
+/**
+ * 显示心情 (查看模式)。
+ */
 @Composable
 fun ViewMood(score: Int) {
     val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
@@ -324,7 +332,10 @@ fun ViewMood(score: Int) {
     }
 }
 
-// --- [修改点 3: ViewLogCard] ---
+/**
+ * 显示日志卡片 (查看模式)。
+ * 包括标题、文本、图片和时长。
+ */
 @Composable
 fun ViewLogCard(
     logItem: LogItemWithTexts,
@@ -335,32 +346,31 @@ fun ViewLogCard(
     val duration = logItem.logItem.duration
     val mediaPath = logItem.logItem.mediaPath
 
+    // 1. 显示标题和文本
     ViewTextCard(title = title, texts = texts)
 
+    // 2. 显示媒体（如果存在）
     if (mediaPath != null) {
-        // 1. 添加状态
         var showFullScreen by remember { mutableStateOf(false) }
 
-        // 2. 使用 Box 添加按钮
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp, start = 16.dp, end = 16.dp)
-                .height(200.dp) // (修改) 始终固定高度
+                .height(200.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surface)
-                .clickable { showFullScreen = true } // (修改) 点击打开弹窗
+                .clickable { showFullScreen = true } // 点击全屏
         ) {
             AsyncImage(
                 model = mediaPath,
                 contentDescription = "保存的图片",
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop // (修改) 始终裁剪
+                contentScale = ContentScale.Crop
             )
-            // (移除 AspectRatio 按钮)
         }
 
-        // 3. (新增) 弹窗
+        // 全屏查看器
         if (showFullScreen) {
             FullScreenImageViewer(
                 path = mediaPath,
@@ -369,6 +379,7 @@ fun ViewLogCard(
         }
     }
 
+    // 3. 显示时长（如果存在且大于0）
     if (duration != null && duration > 0f) {
         Text(
             "时长: ${duration}h",
@@ -378,8 +389,11 @@ fun ViewLogCard(
         )
     }
 }
-// --- [修改点 3 结束] ---
 
+/**
+ * 显示文本卡片 (查看模式)。
+ * 用于 [ViewLogCard] 和明日计划。
+ */
 @Composable
 fun ViewTextCard(title: String, texts: List<String>) {
     if (texts.isEmpty() && title != "明日计划") return
@@ -394,6 +408,7 @@ fun ViewTextCard(title: String, texts: List<String>) {
             if (texts.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
                 texts.forEach {
+                    // 使用 • (圆点) 分隔多行
                     Text("• $it", style = MaterialTheme.typography.bodyLarge)
                 }
             }
@@ -401,7 +416,10 @@ fun ViewTextCard(title: String, texts: List<String>) {
     }
 }
 
-// --- [新增: 全屏查看器] ---
+/**
+ * 全屏图片查看器 (Dialog)。
+ * 点击图片或背景可关闭。
+ */
 @Composable
 fun FullScreenImageViewer(
     path: String,
@@ -415,12 +433,12 @@ fun FullScreenImageViewer(
             dismissOnClickOutside = true
         )
     ) {
-        // 使用 Surface 覆盖整个屏幕
+        // 半透明遮罩
         Surface(
             modifier = Modifier
                 .fillMaxSize()
                 .clickable { onDismiss() }, // 点击任意位置关闭
-            color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.8f) // 半透明遮罩
+            color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.8f)
         ) {
             Box(
                 modifier = Modifier
@@ -432,10 +450,9 @@ fun FullScreenImageViewer(
                     model = path,
                     contentDescription = "全屏图片",
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit // [核心] 保持原始宽高比
+                    contentScale = ContentScale.Fit // 保持原始宽高比
                 )
             }
         }
     }
 }
-// --- [新增 结束] ---

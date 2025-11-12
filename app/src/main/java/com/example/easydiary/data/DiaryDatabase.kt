@@ -30,7 +30,7 @@ abstract class DiaryDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: DiaryDatabase? = null
 
-        // *** V1 -> V2 数据迁移 (已修复) ***
+        // 数据库 V1 -> V2 数据迁移
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // 1. 重命名 V1 表
@@ -59,7 +59,7 @@ abstract class DiaryDatabase : RoomDatabase() {
 
                     val date = if (dateIndex != -1) cursorV1.getString(dateIndex) else null
 
-                    // (*** 修复: 如果 V1 日期为空，则跳过此条损坏的记录 ***)
+                    // 修复: 如果 V1 日期为空，则跳过此条损坏的记录
                     if (date.isNullOrBlank()) {
                         continue
                     }
@@ -70,7 +70,7 @@ abstract class DiaryDatabase : RoomDatabase() {
                     val miscLog = if (miscLogIndex != -1) cursorV1.getString(miscLogIndex) else null
                     val workDuration = if (workDurationIndex != -1) cursorV1.getFloat(workDurationIndex) else 0.0f
 
-                    // (V1: 1-10 -> V2: 0-4)
+                    // 将 V1 的心情评分 (1-10) 转换为 V2 (0-4)
                     val moodV2 = (moodV1 - 1).coerceIn(0, 9) / 2
 
                     // 4a. 插入 V2 顶层 Entry
@@ -138,7 +138,9 @@ abstract class DiaryDatabase : RoomDatabase() {
             }
         }
 
-        // 数据库创建时，填充默认的 LogTypes
+        /**
+         * 数据库创建时的回调，用于填充默认的 LogTypes。
+         */
         private class DatabaseCallback(private val scope: CoroutineScope) : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)

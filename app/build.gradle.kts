@@ -1,5 +1,4 @@
 // 文件位置: app/build.gradle.kts
-// [已修复]: 重新添加 foundation 依赖，它是布局所必需的
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -15,14 +14,9 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 2
-        versionName = "2.0.0"
-
+        versionName = "2.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-
-
-
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -37,10 +31,6 @@ android {
 
     // 启用 Compose
     buildFeatures {
-
-
-
-
         compose = true
     }
 
@@ -62,58 +52,42 @@ android {
 dependencies {
 
     // 统一版本号
-
-
-    val roomVersion =
-
-        "2.6.1"
+    val roomVersion = "2.6.1"
     val navVersion = "2.7.5"
-
     val composeBomVersion = "2024.05.00"
-    implementation(platform("androidx.compose:compose-bom:$composeBomVersion"))
 
-    // Compose 核心依赖
+    // Compose
+    implementation(platform("androidx.compose:compose-bom:$composeBomVersion"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-
-    // --- [修改点: 重新添加 FOUNDATION 依赖 (布局必需)] ---
     implementation("androidx.compose.foundation:foundation")
-    // --- [修改点 结束] ---
-
-    // 核心 M3 库
     implementation("androidx.compose.material3:material3")
-
-    // 图标库
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
 
-    //
+    // 核心 KTX
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.activity:activity-compose:1.8.1")
 
-    // --- Room 数据库 ---
-
+    // Room 数据库
     implementation("androidx.room:room-runtime:$roomVersion")
-
+    implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
-    implementation("androidx.room:room-ktx:$roomVersion")
-
-    // --- Compose Navigation ---
+    // Compose Navigation
     implementation("androidx.navigation:navigation-compose:$navVersion")
 
-    // --- DataStore (L14/L19) ---
+    // DataStore (用于应用设置)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // (*** 1. Coil (用于异步加载图片) ***)
+    // Coil (用于异步加载图片)
     implementation("io.coil-kt:coil-compose:2.5.0")
 
-    // --- [新增: 修复图片旋转问题] ---
+    // ExifInterface (用于读取图片旋转信息)
     implementation("androidx.exifinterface:exifinterface:1.3.7")
-    // --- [新增 结束] ---
 
-
+    // 测试依赖
     // (测试依赖...)
 }
