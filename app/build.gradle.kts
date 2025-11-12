@@ -1,5 +1,5 @@
 // 文件位置: app/build.gradle.kts
-// [已修改]: 添加 exifinterface 依赖
+// [已修复]: 重新添加 foundation 依赖，它是布局所必需的
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -22,6 +22,7 @@ android {
 
 
 
+
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -36,6 +37,7 @@ android {
 
     // 启用 Compose
     buildFeatures {
+
 
 
 
@@ -61,6 +63,7 @@ dependencies {
 
     // 统一版本号
 
+
     val roomVersion =
 
         "2.6.1"
@@ -74,7 +77,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
 
-    // --- [修改点: 新增 FOUNDATION 依赖 (用于 Pager)] ---
+    // --- [修改点: 重新添加 FOUNDATION 依赖 (布局必需)] ---
     implementation("androidx.compose.foundation:foundation")
     // --- [修改点 结束] ---
 
@@ -85,7 +88,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // --- 其他依赖 (保持不变) ---
+    //
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.activity:activity-compose:1.8.1")
@@ -111,7 +114,6 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     // --- [新增 结束] ---
 
-    // (*** 2. 移除: Vico 和 YCharts ***)
 
     // (测试依赖...)
 }

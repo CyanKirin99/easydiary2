@@ -1,10 +1,9 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/home/HomeScreen.kt
-// [已修复]: 1. 彻底修复“日视图” (THREE_DAY) Pager 和 selectedDate 间的无限循环。
-// [已修复]: 2. 删除了导致循环的 LaunchedEffect(selectedDate, ...)。
-// [已修复]: 3. 顶部按钮和日期选择器现在改为向 Pager 发送滚动命令，而不是直接设置 selectedDate。
+// [已修改]: 1. 移除了 Pager 和 THREE_DAY 相关的无限循环修复。
+// [已修改]: 2. 移除了 PagerState, CoroutineScope 和相关辅助函数。
+// [已修改]: 3. 移除了 THREE_DAY 的所有逻辑分支。
 package com.example.easydiary.ui.home
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -28,7 +26,6 @@ import com.example.easydiary.ui.DiaryViewModel
 import com.example.easydiary.ui.home.YearPickerHeader
 import com.example.easydiary.ui.home.MonthPickerGrid
 import com.example.easydiary.ui.home.WeekViewGrid
-import com.example.easydiary.ui.home.DayViewPager
 import com.example.easydiary.ui.home.WeekPickerGrid
 import java.time.temporal.WeekFields
 import java.time.DayOfWeek
@@ -37,25 +34,8 @@ import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import androidx.compose.runtime.snapshotFlow
-// [新增] 导入协程
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-
-// (常量和辅助函数保持不变)
-internal const val A_CENTER_PAGE = Int.MAX_VALUE / 2
-
-internal fun pageToDate(page: Int): LocalDate {
-    val daysToAdd = page - A_CENTER_PAGE.toLong()
-    return LocalDate.now().plusDays(daysToAdd)
-}
-
-internal fun dateToPage(date: LocalDate): Int {
-    val daysBetween = ChronoUnit.DAYS.between(LocalDate.now(), date)
-    return A_CENTER_PAGE + daysBetween.toInt()
-}
 
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     viewModel: DiaryViewModel,
@@ -82,33 +62,14 @@ fun HomeScreen(
     var totalDrag by remember { mutableStateOf(0f) }
     val weekFields = WeekFields.of(DayOfWeek.SUNDAY, 1)
 
-    // --- [修改点 1: Pager 状态] ---
-    val scope = rememberCoroutineScope() // [新增] 用于命令 Pager 滚动
-    val pagerState = rememberPagerState(
-        initialPage = dateToPage(selectedDate), // 初始页由 selectedDate 决定
-        pageCount = { Int.MAX_VALUE }
-    )
+    // --- [已删除] Pager 状态和 LaunchedEffect ---
 
-    // (A) 监听滑动：(单向) Pager -> selectedDate
-    // 当 Pager 停止滑动时，更新 selectedDate
-    LaunchedEffect(pagerState.currentPage, viewMode) {
-        if (viewMode == CalendarView.THREE_DAY) {
-            val newDate = pageToDate(pagerState.currentPage)
-            if (newDate != selectedDate) {
-                selectedDate = newDate
-                currentMonth = YearMonth.from(newDate)
-            }
-        }
-    }
-
-    // (B) [删除] 删除了导致循环的 LaunchedEffect(selectedDate, viewMode)
-    // --- [修改点 1 结束] ---
 
     Column(
         Modifier
             .fillMaxSize()
             .pointerInput(isMonthPickerVisible, viewMode) {
-                if (viewMode == CalendarView.THREE_DAY) return@pointerInput // 日视图使用 Pager 滑动
+                // [已删除] 日视图 Pager 滑动检查
 
                 detectHorizontalDragGestures(
                     onDragStart = { totalDrag = 0f },
@@ -150,7 +111,7 @@ fun HomeScreen(
                                         currentMonth = YearMonth.from(newDate)
                                     }
                                 }
-                                CalendarView.THREE_DAY -> {}
+                                // [已删除] THREE_DAY case
                             }
                         }
                     }
@@ -168,7 +129,7 @@ fun HomeScreen(
 
             // --- [修改点 2: 日期选择器的逻辑] ---
             when(viewMode) {
-                CalendarView.MONTH, CalendarView.THREE_DAY -> {
+                CalendarView.MONTH -> { // [修改] 合并 MONTH 和 THREE_DAY
                     MonthPickerGrid(
                         pickerYear = pickerYear,
                         selectedMonthValue = if (pickerYear == currentMonth.year) currentMonth.monthValue else -1,
@@ -177,15 +138,8 @@ fun HomeScreen(
                             currentMonth = newMonth
                             val newDate = newMonth.atDay(1)
 
-                            if (viewMode == CalendarView.THREE_DAY) {
-                                // 日视图：命令 Pager 滚动
-                                scope.launch {
-                                    pagerState.animateScrollToPage(dateToPage(newDate))
-                                }
-                            } else {
-                                // 月视图：直接更新
-                                selectedDate = newDate
-                            }
+                            // [修改] 移除 Pager 滚动命令
+                            selectedDate = newDate
                             isMonthPickerVisible = false
                         }
                     )
@@ -214,19 +168,13 @@ fun HomeScreen(
             CalendarHeader(
                 viewMode = viewMode,
                 currentMonth = currentMonth,
-                selectedDate = selectedDate, // Pager 会更新 selectedDate, Header 会自动响应
+                selectedDate = selectedDate,
                 onPrev = {
                     when (viewMode) {
                         CalendarView.MONTH -> currentMonth = currentMonth.minusMonths(1)
                         CalendarView.WEEK -> {
                             selectedDate = selectedDate.minusWeeks(1)
                             currentMonth = YearMonth.from(selectedDate)
-                        }
-                        CalendarView.THREE_DAY -> {
-                            // (日视图：命令 Pager)
-                            scope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                            }
                         }
                     }
                 },
@@ -237,17 +185,11 @@ fun HomeScreen(
                             selectedDate = selectedDate.plusWeeks(1)
                             currentMonth = YearMonth.from(selectedDate)
                         }
-                        CalendarView.THREE_DAY -> {
-                            // (日视图：命令 Pager)
-                            scope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                            }
-                        }
                     }
                 },
                 onTitleClick = {
                     pickerYear = when(viewMode) {
-                        CalendarView.WEEK, CalendarView.THREE_DAY -> selectedDate.year
+                        CalendarView.WEEK -> selectedDate.year // [修改]
                         CalendarView.MONTH -> currentMonth.year
                     }
                     isMonthPickerVisible = true
@@ -279,25 +221,6 @@ fun HomeScreen(
                         onDateClick = {
                             selectedDate = it
                             onDateClick(it)
-                        }
-                    )
-                }
-                CalendarView.THREE_DAY -> {
-                    DayViewPager(
-                        pagerState = pagerState,
-                        entriesMap = entriesMap,
-                        logItemsMap = logItemsMap,
-                        onDateClick = { date ->
-                            // (点击卡片时，也只命令 Pager 滚动)
-                            // (这确保了 selectedDate 只由 Pager 的 LaunchedEffect 更新)
-                            val targetPage = dateToPage(date)
-                            if (pagerState.currentPage != targetPage) {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(targetPage)
-                                }
-                            }
-                            // (然后导航)
-                            onDateClick(date)
                         }
                     )
                 }

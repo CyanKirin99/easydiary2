@@ -1,4 +1,5 @@
 // 文件位置: app/src/main/java/com/example/easydiary/data/SettingsRepository.kt
+// [已修复]: 添加 try-catch 逻辑，以防止加载已删除的 "THREE_DAY" 枚举时崩溃
 package com.example.easydiary.data
 
 import android.content.Context
@@ -17,7 +18,8 @@ enum class AppTheme {
 
 // L14: 定义日历视图的枚举
 enum class CalendarView {
-    MONTH, WEEK, THREE_DAY
+    MONTH, WEEK
+    // [已删除] THREE_DAY
 }
 
 // DataStore 文件名
@@ -50,9 +52,13 @@ class SettingsRepository(context: Context) {
     // 3. (L14) 暴露 CALENDAR_VIEW Flow
     val calendarView: Flow<CalendarView> = dataStore.data
         .map { preferences ->
-            CalendarView.valueOf(
-                preferences[Keys.CALENDAR_VIEW] ?: CalendarView.MONTH.name
-            )
+            // [修改点] 安全地解析枚举值
+            val viewName = preferences[Keys.CALENDAR_VIEW] ?: CalendarView.MONTH.name
+            try {
+                CalendarView.valueOf(viewName)
+            } catch (e: IllegalArgumentException) {
+                CalendarView.MONTH
+            }
         }
 
     // 4. (L19) 更新 APP_THEME
