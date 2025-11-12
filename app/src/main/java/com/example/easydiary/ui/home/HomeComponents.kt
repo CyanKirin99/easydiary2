@@ -1,16 +1,7 @@
-// 文件位置: app/src/main/java/com/example/easydiary/ui/home/HomeComponents.kt
-// [已修改]: 1. 导入 Foundation (Pager) 和 graphicsLayer (动画)。
-// [已删除]: 2. ThreeDayView (已废弃)。
-// [已新增]: 3. DaySummaryCard (日视图的卡片)。
-// [已新增]: 4. DayViewPager (日视图的翻页器实现)。
+// 文件位置: app/src/main/java/com/example/easydiary/ui/home/HomeComponents.kt。
 package com.example.easydiary.ui.home
 
-// [修改点 1] 新增导入
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
-// ---
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,8 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-// [修改点 1] 新增导入
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,8 +55,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.WeekFields
 import java.util.Locale
-// [修改点 1] 新增导入
-import kotlin.math.abs
+
 
 /**
  * 日历单元格 (改编自 V1)
@@ -143,10 +131,6 @@ fun CalendarHeader(
                 val weekNum = selectedDate.get(weekFields.weekOfYear())
                 "${selectedDate.year} 年 第 ${weekNum} 周"
             }
-            // (日视图) 标题
-            CalendarView.THREE_DAY -> {
-                selectedDate.format(DateTimeFormatter.ofPattern("yyyy 年 M 月 d 日"))
-            }
         }
     }
 
@@ -154,7 +138,6 @@ fun CalendarHeader(
         when (viewMode) {
             CalendarView.MONTH -> Pair("上个月", "下个月")
             CalendarView.WEEK -> Pair("上一周", "下一周")
-            CalendarView.THREE_DAY -> Pair("前一天", "后一天")
         }
     }
 
@@ -462,7 +445,7 @@ private fun WeekCell(
 
     Box(
         modifier = Modifier
-            .aspectRatio(1.2f)
+            .aspectRatio(2.0f)
             .clip(RoundedCornerShape(12.dp))
             .background(
                 when {
@@ -614,161 +597,3 @@ fun WeekViewGrid(
         }
     }
 }
-
-
-// --- [修改点 2: 删除旧的 ThreeDayView] ---
-// (旧的 ThreeDayView Composable 已被删除)
-
-
-// --- [新增: 日视图 Pager] ---
-
-/**
- * (新) 日视图卡片 (迷你摘要)
- */
-@Composable
-fun DaySummaryCard(
-    date: LocalDate,
-    entry: DiaryEntry?,
-    logs: List<LogItemWithTexts>?,
-    isToday: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
-    val dayName = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.SIMPLIFIED_CHINESE) // "星期日"
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp), // 更大的圆角
-        colors = CardDefaults.cardColors(
-            containerColor = if (isToday) MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(4.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp), // 更大的内边距
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // 1. 星期
-            Text(
-                text = dayName,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.secondary
-            )
-            // 2. 心情
-            Text(
-                text = entry?.moodScore?.let { emojis.getOrNull(it) } ?: "🤔", // 默认表情
-                fontSize = 48.sp,
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-
-            Divider(modifier = Modifier.padding(bottom = 16.dp))
-
-            // 3. 日志摘要 (LazyColumn 模拟 mini-EntryScreen)
-            if (entry == null && logs.isNullOrEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("无记录", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.secondary)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // (显示所有日志条目的第一个摘要)
-                    logs?.forEach { logItem ->
-                        item {
-                            val logType = logItem.logItem.logTypeId // (理想情况下我们应该有 LogType 名称)
-                            val snippet = logItem.texts.firstOrNull()?.content
-                            if (snippet != null) {
-                                Text(
-                                    text = "• $snippet",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-
-                    // (显示明日计划)
-                    if (!entry?.tomorrowPlan.isNullOrBlank()) {
-                        item {
-                            Text(
-                                "明日计划:",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                            Text(
-                                text = entry!!.tomorrowPlan!!,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-/**
- * (新) 日视图翻页器
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun DayViewPager(
-    pagerState: PagerState,
-    entriesMap: Map<LocalDate, DiaryEntry>,
-    logItemsMap: Map<LocalDate, List<LogItemWithTexts>>,
-    onDateClick: (LocalDate) -> Unit
-) {
-    HorizontalPager(
-        state = pagerState,
-        modifier = Modifier.fillMaxSize(),
-        // [核心] 1. 左右留白，以显示部分卡片
-        contentPadding = PaddingValues(horizontal = 40.dp),
-        // [核心] 2. 卡片间距
-        pageSpacing = 16.dp
-    ) { pageIndex ->
-
-        val date = pageToDate(pageIndex)
-        val entry = entriesMap[date]
-        val logs = logItemsMap[date]
-
-        // [核心] 3. 动画效果
-        val pageOffset = abs(pagerState.currentPage - pageIndex + pagerState.currentPageOffsetFraction)
-        val scale = lerp(1f, 0.85f, pageOffset.coerceIn(0f, 1f))
-        val alpha = lerp(1f, 0.5f, pageOffset.coerceIn(0f, 1f))
-
-        DaySummaryCard(
-            date = date,
-            entry = entry,
-            logs = logs,
-            isToday = (date == LocalDate.now()),
-            onClick = { onDateClick(date) },
-            modifier = Modifier
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    this.alpha = alpha
-                }
-        )
-    }
-}
-
-// [新增] 线性插值辅助函数 (用于动画)
-private fun lerp(start: Float, stop: Float, fraction: Float): Float {
-    return (1 - fraction) * start + fraction * stop
-}
-// --- [新增 结束] ---

@@ -37,7 +37,7 @@ fun ViewSettingsScreen(
         Column(modifier = Modifier.padding(paddingValues)) {
             // 2. 渲染 L14 选项
             SettingsRadioItem(
-                label = "月视图 (默认)",
+                label = "月视图",
                 isSelected = currentView == CalendarView.MONTH,
                 onClick = { viewModel.updateCalendarView(CalendarView.MONTH) }
             )
@@ -46,12 +46,7 @@ fun ViewSettingsScreen(
                 isSelected = currentView == CalendarView.WEEK,
                 onClick = { viewModel.updateCalendarView(CalendarView.WEEK) }
             )
-            SettingsRadioItem(
-                label = "日视图",
-                isSelected = currentView == CalendarView.THREE_DAY,
-                onClick = { viewModel.updateCalendarView(CalendarView.THREE_DAY) }
-            )
-            // (TODO: L14 的预览图)
+            // [已删除] 日视图的 SettingsRadioItem
         }
     }
 }
