@@ -25,7 +25,7 @@ fun ViewSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("视图选择 (L14)") },
+                title = { Text("视图选择") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
@@ -47,7 +47,7 @@ fun ViewSettingsScreen(
                 onClick = { viewModel.updateCalendarView(CalendarView.WEEK) }
             )
             SettingsRadioItem(
-                label = "3日视图",
+                label = "日视图",
                 isSelected = currentView == CalendarView.THREE_DAY,
                 onClick = { viewModel.updateCalendarView(CalendarView.THREE_DAY) }
             )

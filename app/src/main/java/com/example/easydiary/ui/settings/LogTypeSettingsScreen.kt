@@ -78,7 +78,7 @@ fun LogTypeSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("记录类型设置 (L15)") },
+                title = { Text("记录类型") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
