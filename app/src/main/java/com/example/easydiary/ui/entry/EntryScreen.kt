@@ -1,4 +1,5 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/entry/EntryScreen.kt
+// [已修改]: 1. 导入新图标和组件。 2. 修改 ViewLogCard 以支持图片展开/收起。
 package com.example.easydiary.ui.entry
 
 // [修改点 1] 导入 BackHandler
@@ -29,6 +30,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.ContentScale
 
+// --- [新增导入] ---
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.ui.graphics.Color
+// --- [新增导入 结束] ---
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EntryScreen(
@@ -37,6 +46,7 @@ fun EntryScreen(
     onBack: () -> Unit,
     onDateChange: (LocalDate) -> Unit
 ) {
+    // ... (EntryScreen 顶部 保持不变) ...
     val diaryDetails by viewModel.getDiaryForDate(selectedDate.toString())
         .collectAsState(initial = null)
 
@@ -59,7 +69,6 @@ fun EntryScreen(
     var totalDrag by remember { mutableStateOf(0f) }
 
     // [修改点 2] 拦截系统返回键
-    // 当处于编辑模式 (isEditing = true) 时，系统返回键将只会设置 isEditing = false
     BackHandler(enabled = isEditing) {
         isEditing = false
     }
@@ -170,6 +179,7 @@ fun EntryScreen(
 
 
 // --- 编辑模式 (已连接) ---
+// (EditModeContent 保持不变)
 @Composable
 fun EditModeContent(
     modifier: Modifier = Modifier,
@@ -212,6 +222,7 @@ fun EditModeContent(
 }
 
 // --- (新) 查看模式 (已实现) ---
+// (ViewModeContent 保持不变)
 @Composable
 fun ViewModeContent(
     modifier: Modifier = Modifier,
@@ -275,6 +286,7 @@ fun ViewModeContent(
 
 // --- 查看模式的子组件 ---
 
+// (ViewMood 保持不变)
 @Composable
 fun ViewMood(score: Int) {
     val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
@@ -287,6 +299,7 @@ fun ViewMood(score: Int) {
     }
 }
 
+// --- [修改点: ViewLogCard] ---
 @Composable
 fun ViewLogCard(
     logItem: com.example.easydiary.data.model.LogItemWithTexts,
@@ -299,18 +312,53 @@ fun ViewLogCard(
 
     ViewTextCard(title = title, texts = texts)
 
+    // --- [修改点 2: 图像显示逻辑] ---
     if (mediaPath != null) {
-        AsyncImage(
-            model = mediaPath,
-            contentDescription = "保存的图片",
+        // 1. 添加状态
+        var isImageExpanded by remember { mutableStateOf(false) }
+
+        // 2. 根据状态决定高度和缩放
+        val (heightModifier, imageScale) = if (isImageExpanded) {
+            // 展开: 无高度限制 (但最大600dp), 适应宽度
+            Pair(Modifier.heightIn(max = 600.dp), ContentScale.FillWidth)
+        } else {
+            // 收起: 固定200dp高度, 裁剪
+            Pair(Modifier.height(200.dp), ContentScale.Crop)
+        }
+
+        // 3. 使用 Box 添加按钮
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp, start = 16.dp, end = 16.dp)
-                .height(200.dp)
-                .clip(RoundedCornerShape(8.dp)),
-            contentScale = ContentScale.Crop
-        )
+                .then(heightModifier) // 应用动态高度
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface) // 背景以防 FillWidth 留白
+        ) {
+            AsyncImage(
+                model = mediaPath,
+                contentDescription = "保存的图片",
+                modifier = Modifier.fillMaxSize(), // 图片填满 Box
+                contentScale = imageScale // 应用动态缩放
+            )
+            // 4. 添加切换按钮
+            IconButton(
+                onClick = { isImageExpanded = !isImageExpanded },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
+            ) {
+                Icon(
+                    Icons.Default.AspectRatio, // 切换图标
+                    "Toggle view",
+                    tint = Color.White
+                )
+            }
+        }
     }
+    // --- [修改点 2 结束] ---
 
     if (duration != null && duration > 0f) {
         Text(
@@ -322,6 +370,7 @@ fun ViewLogCard(
     }
 }
 
+// (ViewTextCard 保持不变)
 @Composable
 fun ViewTextCard(title: String, texts: List<String>) {
     if (texts.isEmpty() && title != "明日计划") return

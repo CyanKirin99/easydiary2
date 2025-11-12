@@ -1,4 +1,5 @@
 // 文件位置: app/build.gradle.kts
+// [已修改]: 添加 exifinterface 依赖
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,11 +14,12 @@ android {
         applicationId = "com.example.easydiary"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0.0"
 
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
 
         vectorDrawables {
             useSupportLibrary = true
@@ -33,6 +35,7 @@ android {
 
     // 启用 Compose
     buildFeatures {
+
 
         compose = true
     }
@@ -56,6 +59,7 @@ dependencies {
 
     // 统一版本号
     val roomVersion =
+
         "2.6.1"
     val navVersion = "2.7.5"
 
@@ -81,6 +85,7 @@ dependencies {
 
     // --- Room 数据库 ---
     implementation("androidx.room:room-runtime:$roomVersion")
+
     ksp("androidx.room:room-compiler:$roomVersion")
 
     implementation("androidx.room:room-ktx:$roomVersion")
@@ -93,6 +98,10 @@ dependencies {
 
     // (*** 1. Coil (用于异步加载图片) ***)
     implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // --- [新增: 修复图片旋转问题] ---
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // --- [新增 结束] ---
 
     // (*** 2. 移除: Vico 和 YCharts ***)
 

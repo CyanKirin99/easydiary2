@@ -1,4 +1,5 @@
 // 文件位置: app/src/main/java/com/example/easydiary/ui/settings/SettingsScreen.kt
+// [已修改]: 合并导入/导出条目为"数据管理"
 package com.example.easydiary.ui.settings
 
 import androidx.compose.foundation.clickable
@@ -23,6 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.example.easydiary.ui.Screen
+// --- [新增导入] ---
+import androidx.compose.material.icons.filled.Storage
+// --- [新增导入 结束] ---
 
 @Composable
 fun SettingsScreen(
@@ -79,23 +83,16 @@ fun SettingsScreen(
             Divider(Modifier.padding(vertical = 8.dp))
         }
 
-        // (*** 1. 新增: L17, L18 ***)
+        // --- [修改点: 合并] ---
         item {
             SettingsItem(
-                icon = Icons.Default.Upload,
-                title = "导出数据",
-                subtitle = "将所有数据备份为 .zip 文件",
-                onClick = { onNavigate(Screen.DataIO.route) } // (*** 2. 使用新路由 ***)
+                icon = Icons.Default.Storage, // 使用新图标
+                title = "数据管理",
+                subtitle = "备份、恢复或导出数据",
+                onClick = { onNavigate(Screen.DataIO.route) }
             )
         }
-        item {
-            SettingsItem(
-                icon = Icons.Default.Download,
-                title = "导入数据",
-                subtitle = "从 .zip 备份文件恢复",
-                onClick = { onNavigate(Screen.DataIO.route) } // (*** 3. 使用新路由 ***)
-            )
-        }
+        // --- [修改点 结束] ---
     }
 }
 
