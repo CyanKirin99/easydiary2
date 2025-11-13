@@ -194,7 +194,7 @@ fun HomeScreen(
             )
 
             // 显示 "日, 一, 二, ..."
-            if (viewMode == CalendarView.MONTH || viewMode == CalendarView.WEEK) {
+            if (viewMode == CalendarView.MONTH) {
                 DaysOfWeekTitle()
             }
 
