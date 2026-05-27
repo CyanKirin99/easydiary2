@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.example.easydiary.data.CalendarView
 import com.example.easydiary.data.model.DiaryEntry
 import com.example.easydiary.data.model.LogItemWithTexts
+import com.example.easydiary.util.LunarUtil
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -70,6 +71,15 @@ fun DayCell(
     onClick: () -> Unit
 ) {
     val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
+    val lunarInfo = remember(date) { LunarUtil.getLunarInfo(date) }
+    val lunarDisplay = remember(lunarInfo) {
+        when {
+            lunarInfo.festivals.isNotEmpty() -> lunarInfo.festivals.first()
+            lunarInfo.day == "初一" -> lunarInfo.month
+            lunarInfo.day == "十五" -> "十五"
+            else -> lunarInfo.day
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -95,11 +105,22 @@ fun DayCell(
                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.Unspecified,
                 fontSize = 14.sp
             )
+            if (lunarDisplay.isNotEmpty()) {
+                Text(
+                    text = lunarDisplay,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                    else if (lunarInfo.festivals.isNotEmpty()) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                    fontSize = 9.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             if (entry != null) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Text(
                     emojis[entry.moodScore],
-                    fontSize = 18.sp,
+                    fontSize = 15.sp,
                 )
             }
         }
@@ -439,6 +460,14 @@ fun WeekDayCard(
 ) {
     val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
     val dayName = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.SIMPLIFIED_CHINESE)
+    val lunarInfo = remember(date) { LunarUtil.getLunarInfo(date) }
+    val lunarDisplay = remember(lunarInfo) {
+        when {
+            lunarInfo.festivals.isNotEmpty() -> lunarInfo.festivals.first()
+            lunarInfo.day == "初一" -> lunarInfo.month
+            else -> lunarInfo.day
+        }
+    }
 
     val firstLogSnippet = remember(logs) {
         logs?.firstOrNull()?.texts?.firstOrNull()?.content
@@ -473,6 +502,15 @@ fun WeekDayCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.secondary
                 )
+                if (lunarDisplay.isNotEmpty()) {
+                    Text(
+                        text = lunarDisplay,
+                        fontSize = 10.sp,
+                        color = if (lunarInfo.festivals.isNotEmpty()) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        maxLines = 1
+                    )
+                }
             }
 
             Spacer(Modifier.width(16.dp))
