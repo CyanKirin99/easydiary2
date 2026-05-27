@@ -9,15 +9,6 @@ android {
     namespace = "com.example.easydiary"
     compileSdk = 34
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("easydiary.jks")
-            storePassword = "123456"
-            keyAlias = "easydiary"
-            keyPassword = "123456"
-        }
-    }
-
     defaultConfig {
         applicationId = "com.example.easydiary"
         minSdk = 26
@@ -35,7 +26,6 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -99,5 +89,7 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     // 测试依赖
-    // (测试依赖...)
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
