@@ -105,7 +105,13 @@ fun DayCell(
                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.Unspecified,
                 fontSize = 14.sp
             )
-            if (lunarDisplay.isNotEmpty()) {
+            if (entry != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    emojis[entry.moodScore],
+                    fontSize = 18.sp,
+                )
+            } else if (lunarDisplay.isNotEmpty()) {
                 Text(
                     text = lunarDisplay,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
@@ -114,13 +120,6 @@ fun DayCell(
                     fontSize = 9.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (entry != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    emojis[entry.moodScore],
-                    fontSize = 15.sp,
                 )
             }
         }
