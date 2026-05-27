@@ -15,13 +15,12 @@ fun getTypography(fontFamily: AppFontFamily): Typography {
         AppFontFamily.MONOSPACE -> FontFamily.Monospace
     }
     return Typography(
-        bodyLarge = TextStyle(
-            fontFamily = family,
-            fontWeight = FontWeight.Normal,
-            fontSize = 16.sp,
-            lineHeight = 24.sp,
-            letterSpacing = 0.5.sp
-        ),
+        displayLarge = TextStyle(fontFamily = family),
+        displayMedium = TextStyle(fontFamily = family),
+        displaySmall = TextStyle(fontFamily = family),
+        headlineLarge = TextStyle(fontFamily = family),
+        headlineMedium = TextStyle(fontFamily = family),
+        headlineSmall = TextStyle(fontFamily = family),
         titleLarge = TextStyle(
             fontFamily = family,
             fontWeight = FontWeight.Normal,
@@ -29,6 +28,19 @@ fun getTypography(fontFamily: AppFontFamily): Typography {
             lineHeight = 28.sp,
             letterSpacing = 0.sp
         ),
+        titleMedium = TextStyle(fontFamily = family),
+        titleSmall = TextStyle(fontFamily = family),
+        bodyLarge = TextStyle(
+            fontFamily = family,
+            fontWeight = FontWeight.Normal,
+            fontSize = 16.sp,
+            lineHeight = 24.sp,
+            letterSpacing = 0.5.sp
+        ),
+        bodyMedium = TextStyle(fontFamily = family),
+        bodySmall = TextStyle(fontFamily = family),
+        labelLarge = TextStyle(fontFamily = family),
+        labelMedium = TextStyle(fontFamily = family),
         labelSmall = TextStyle(
             fontFamily = family,
             fontWeight = FontWeight.Medium,

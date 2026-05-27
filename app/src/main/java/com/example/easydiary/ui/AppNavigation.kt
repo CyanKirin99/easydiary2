@@ -2,8 +2,12 @@
 package com.example.easydiary.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,8 +32,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -52,18 +60,13 @@ import com.example.easydiary.ui.settings.ViewSettingsScreen
 import com.example.easydiary.ui.statistics.StatisticsScreen
 import java.time.LocalDate
 
-/**
- * 定义应用内的所有导航路由。
- */
 sealed class Screen(val route: String, val label: String? = null, val icon: ImageVector? = null) {
     object Home : Screen("home", "主页", Icons.Default.Home)
     object Settings : Screen("settings", "我的", Icons.Default.Person)
-    // 日记条目路由（包含日期参数）
     object Add : Screen(route = "entry") {
         const val routeTemplate = "entry/{date}"
         fun createRoute(date: LocalDate): String = "entry/${date}"
     }
-    // 设置子页面
     object LogTypeSettings : Screen("log_type_settings")
     object ThemeSettings : Screen("theme_settings")
     object FontSettings : Screen("font_settings")
@@ -72,16 +75,8 @@ sealed class Screen(val route: String, val label: String? = null, val icon: Imag
     object DataIO : Screen("data_io")
 }
 
-// 底部导航栏的条目
 val navItems = listOf(Screen.Home, Screen.Settings)
 
-/**
- * 应用的主导航组件 (NavHost) 和界面骨架 (Scaffold)。
- * 负责管理页面跳转和底部导航栏。
- *
- * @param viewModel DiaryViewModel
- * @param onFinish 当用户确认退出时调用。
- */
 @Composable
 fun AppNavigation(
     viewModel: DiaryViewModel,
@@ -95,7 +90,6 @@ fun AppNavigation(
 
     var showExitDialog by remember { mutableStateOf(false) }
 
-    // 处理主屏幕上的返回键，弹出退出对话框
     BackHandler(enabled = isMainScreen && !showExitDialog) {
         showExitDialog = true
     }
@@ -123,10 +117,11 @@ fun AppNavigation(
                     navController = navController,
                     currentDestination = currentDestination,
                     onAddClick = {
-                        // 点击中央按钮，导航到当天的日记条目
                         navController.navigate(Screen.Add.createRoute(LocalDate.now()))
                     }
                 )
+            } else {
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     ) { paddingValues ->
@@ -134,13 +129,11 @@ fun AppNavigation(
             navController = navController,
             startDestination = Screen.Home.route,
             modifier = Modifier.padding(paddingValues),
-            enterTransition = { fadeIn(animationSpec = tween(800)) },
-            exitTransition = { fadeOut(animationSpec = tween(800)) },
-            popEnterTransition = { fadeIn(animationSpec = tween(800)) },
-            popExitTransition = { fadeOut(animationSpec = tween(800)) }
+            enterTransition = { fadeIn(animationSpec = tween(300)) },
+            exitTransition = { fadeOut(animationSpec = tween(300)) },
+            popEnterTransition = { fadeIn(animationSpec = tween(300)) },
+            popExitTransition = { fadeOut(animationSpec = tween(300)) }
         ) {
-
-            // --- 主页 ---
             composable(Screen.Home.route) {
                 HomeScreen(
                     viewModel = viewModel,
@@ -149,32 +142,24 @@ fun AppNavigation(
                     }
                 )
             }
-
-            // --- 设置主页 ---
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigate = { route -> navController.navigate(route) }
                 )
             }
-
-            // --- 日记条目详情/编辑页 ---
             composable(Screen.Add.routeTemplate) { backStackEntry ->
                 val dateStr = backStackEntry.arguments?.getString("date") ?: LocalDate.now().toString()
                 val selectedDate = LocalDate.parse(dateStr)
-
                 EntryScreen(
                     viewModel = viewModel,
                     selectedDate = selectedDate,
                     onBack = { navController.popBackStack() },
                     onDateChange = { newDate ->
-                        // 切换日期时，替换当前导航栈
                         navController.popBackStack()
                         navController.navigate(Screen.Add.createRoute(newDate))
                     }
                 )
             }
-
-            // --- 设置子页面 ---
             composable(Screen.LogTypeSettings.route) {
                 LogTypeSettingsScreen(
                     viewModel = viewModel,
@@ -218,15 +203,11 @@ fun AppNavigation(
     }
 }
 
-/**
- * 自定义的底部导航栏，中间有一个模拟的悬浮按钮 (FAB)。
- * 使用 Surface + Row 替代默认 NavigationBar，视觉效果更统一简洁。
- */
 @Composable
 fun AppBottomBar(
     navController: NavHostController,
     currentDestination: NavDestination?,
-    onAddClick: () -> Unit // 接收点击事件
+    onAddClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -241,7 +222,6 @@ fun AppBottomBar(
                 .height(80.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 1. 主页
             BottomNavItem(
                 modifier = Modifier.weight(1f),
                 screen = Screen.Home,
@@ -249,17 +229,39 @@ fun AppBottomBar(
                 onClick = { navController.navigate(Screen.Home.route) }
             )
 
-            // 2. 自定义“添加”按钮 (模拟 FAB)
+            val fabHaptic = LocalHapticFeedback.current
+            var isFabPressed by remember { mutableStateOf(false) }
+
+            val fabScale by animateFloatAsState(
+                targetValue = if (isFabPressed) 0.85f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessHigh
+                ),
+                label = "fabScale"
+            )
+
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clickable(onClick = onAddClick),
+                    .pointerInput(onAddClick) {
+                        detectTapGestures(
+                            onPress = {
+                                isFabPressed = true
+                                fabHaptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                tryAwaitRelease()
+                                isFabPressed = false
+                            },
+                            onTap = { onAddClick() }
+                        )
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Surface(
                     modifier = Modifier
                         .size(56.dp)
+                        .scale(fabScale)
                         .offset(y = (-8).dp),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary,
@@ -276,7 +278,6 @@ fun AppBottomBar(
                 }
             }
 
-            // 3. 我的
             BottomNavItem(
                 modifier = Modifier.weight(1f),
                 screen = Screen.Settings,
@@ -287,10 +288,6 @@ fun AppBottomBar(
     }
 }
 
-/**
- * 底部导航栏单项：图标 + 标签文字。
- * 选中时使用主色，未选中时使用半透明次级色，无背景遮罩。
- */
 @Composable
 fun RowScope.BottomNavItem(
     screen: Screen,
@@ -304,10 +301,33 @@ fun RowScope.BottomNavItem(
         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
     }
 
+    val haptic = LocalHapticFeedback.current
+    var isPressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "navItemScale"
+    )
+
     Column(
         modifier = modifier
+            .scale(scale)
             .fillMaxHeight()
-            .clickable(onClick = onClick),
+            .pointerInput(onClick) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        tryAwaitRelease()
+                        isPressed = false
+                    },
+                    onTap = { onClick() }
+                )
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -326,9 +346,6 @@ fun RowScope.BottomNavItem(
     }
 }
 
-/**
- * 扩展函数：检查当前导航目标是否匹配指定路由。
- */
 fun NavDestination?.isRoute(route: String): Boolean {
     return this?.hierarchy?.any { it.route == route } == true
 }

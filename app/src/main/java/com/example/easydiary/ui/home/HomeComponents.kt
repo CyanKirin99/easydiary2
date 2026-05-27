@@ -2,8 +2,12 @@
 package com.example.easydiary.ui.home
 
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,11 +39,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,8 +92,21 @@ fun DayCell(
         }
     }
 
+    val haptic = LocalHapticFeedback.current
+    var isPressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.90f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "dayCellScale"
+    )
+
     Box(
         modifier = Modifier
+            .scale(scale)
             .padding(4.dp)
             .aspectRatio(0.75f)
             .clip(RoundedCornerShape(12.dp))
@@ -93,7 +117,17 @@ fun DayCell(
                     else -> Color.Transparent
                 }
             )
-            .clickable(onClick = onClick),
+            .pointerInput(onClick) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        tryAwaitRelease()
+                        isPressed = false
+                    },
+                    onTap = { onClick() }
+                )
+            },
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(vertical = 4.dp),
@@ -103,7 +137,7 @@ fun DayCell(
             Text(
                 text = date.dayOfMonth.toString(),
                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.Unspecified,
-                fontSize = 14.sp
+                style = MaterialTheme.typography.bodyMedium
             )
             if (entry != null) {
                 Spacer(Modifier.height(4.dp))
@@ -117,7 +151,7 @@ fun DayCell(
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                     else if (lunarInfo.festivals.isNotEmpty()) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                    fontSize = 9.sp,
+                    style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -472,11 +506,34 @@ fun WeekDayCard(
         logs?.firstOrNull()?.texts?.firstOrNull()?.content
     }
 
+    val haptic = LocalHapticFeedback.current
+    var isPressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "weekDayCardScale"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(scale)
             .padding(vertical = 4.dp, horizontal = 8.dp)
-            .clickable(onClick = onClick),
+            .pointerInput(onClick) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        tryAwaitRelease()
+                        isPressed = false
+                    },
+                    onTap = { onClick() }
+                )
+            },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = when {
@@ -504,7 +561,7 @@ fun WeekDayCard(
                 if (lunarDisplay.isNotEmpty()) {
                     Text(
                         text = lunarDisplay,
-                        fontSize = 10.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         color = if (lunarInfo.festivals.isNotEmpty()) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         maxLines = 1
