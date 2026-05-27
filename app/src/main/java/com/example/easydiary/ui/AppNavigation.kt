@@ -6,13 +6,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
@@ -214,6 +220,7 @@ fun AppNavigation(
 
 /**
  * 自定义的底部导航栏，中间有一个模拟的悬浮按钮 (FAB)。
+ * 使用 Surface + Row 替代默认 NavigationBar，视觉效果更统一简洁。
  */
 @Composable
 fun AppBottomBar(
@@ -221,68 +228,102 @@ fun AppBottomBar(
     currentDestination: NavDestination?,
     onAddClick: () -> Unit // 接收点击事件
 ) {
-    NavigationBar(
-        modifier = Modifier.height(80.dp) // 确保有足够的高度容纳按钮
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        shadowElevation = 8.dp
     ) {
-        // 1. 主页
-        CustomNavItem(
-            modifier = Modifier.weight(1f),
-            screen = Screen.Home,
-            currentDestination = currentDestination,
-            onClick = { navController.navigate(Screen.Home.route) }
-        )
-
-        // 2. 自定义“添加”按钮 (模拟 FAB)
-        Box(
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .clickable(onClick = onAddClick),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .height(80.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // 1. 主页
+            BottomNavItem(
+                modifier = Modifier.weight(1f),
+                screen = Screen.Home,
+                isSelected = currentDestination.isRoute(Screen.Home.route),
+                onClick = { navController.navigate(Screen.Home.route) }
+            )
+
+            // 2. 自定义“添加”按钮 (模拟 FAB)
             Box(
                 modifier = Modifier
-                    .size(56.dp) // 标准 FAB 尺寸
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(onClick = onAddClick),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Default.Add,
-                    "添加",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(36.dp)
-                )
+                Surface(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .offset(y = (-8).dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    shadowElevation = 8.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Add,
+                            "添加",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
             }
-        }
 
-        // 3. 我的
-        CustomNavItem(
-            modifier = Modifier.weight(1f),
-            screen = Screen.Settings,
-            currentDestination = currentDestination,
-            onClick = { navController.navigate(Screen.Settings.route) }
-        )
+            // 3. 我的
+            BottomNavItem(
+                modifier = Modifier.weight(1f),
+                screen = Screen.Settings,
+                isSelected = currentDestination.isRoute(Screen.Settings.route),
+                onClick = { navController.navigate(Screen.Settings.route) }
+            )
+        }
     }
 }
 
 /**
- * 自定义的 [NavigationBarItem]，用于 [AppBottomBar]。
+ * 底部导航栏单项：图标 + 标签文字。
+ * 选中时使用主色，未选中时使用半透明次级色，无背景遮罩。
  */
 @Composable
-fun RowScope.CustomNavItem(
+fun RowScope.BottomNavItem(
     screen: Screen,
-    currentDestination: NavDestination?,
+    isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    NavigationBarItem(
-        modifier = modifier,
-        selected = currentDestination.isRoute(screen.route),
-        onClick = onClick,
-        icon = { Icon(screen.icon!!, contentDescription = screen.label) },
-        label = { Text(screen.label!!) }
-    )
+    val color = if (isSelected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = screen.icon!!,
+            contentDescription = screen.label,
+            tint = color,
+            modifier = Modifier.size(26.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = screen.label!!,
+            style = MaterialTheme.typography.labelSmall,
+            color = color
+        )
+    }
 }
 
 /**
