@@ -38,6 +38,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.easydiary.ui.entry.EntryScreen
 import com.example.easydiary.ui.home.HomeScreen
 import com.example.easydiary.ui.io.DataIOScreen
+import com.example.easydiary.ui.settings.FontSettingsScreen
 import com.example.easydiary.ui.settings.LogTypeSettingsScreen
 import com.example.easydiary.ui.settings.SettingsScreen
 import com.example.easydiary.ui.settings.ThemeSettingsScreen
@@ -59,6 +60,7 @@ sealed class Screen(val route: String, val label: String? = null, val icon: Imag
     // 设置子页面
     object LogTypeSettings : Screen("log_type_settings")
     object ThemeSettings : Screen("theme_settings")
+    object FontSettings : Screen("font_settings")
     object ViewSettings : Screen("view_settings")
     object Statistics : Screen("statistics")
     object DataIO : Screen("data_io")
@@ -175,6 +177,12 @@ fun AppNavigation(
             }
             composable(Screen.ThemeSettings.route) {
                 ThemeSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.FontSettings.route) {
+                FontSettingsScreen(
                     viewModel = viewModel,
                     onBack = { navController.popBackStack() }
                 )

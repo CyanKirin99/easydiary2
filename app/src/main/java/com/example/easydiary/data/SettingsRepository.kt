@@ -19,7 +19,14 @@ enum class AppTheme {
 // L14: 定义日历视图的枚举
 enum class CalendarView {
     MONTH, WEEK
-    // [已删除] THREE_DAY
+}
+
+enum class ThemePreset {
+    WARM, COOL, NATURE, RETRO
+}
+
+enum class AppFontFamily {
+    DEFAULT, SANS_SERIF, SERIF, MONOSPACE
 }
 
 // DataStore 文件名
@@ -39,25 +46,52 @@ class SettingsRepository(context: Context) {
     private object Keys {
         val APP_THEME = stringPreferencesKey("app_theme")
         val CALENDAR_VIEW = stringPreferencesKey("calendar_view")
+        val THEME_PRESET = stringPreferencesKey("theme_preset")
+        val APP_FONT_FAMILY = stringPreferencesKey("app_font_family")
     }
 
     // 2. (L19) 暴露 APP_THEME Flow
     val appTheme: Flow<AppTheme> = dataStore.data
         .map { preferences ->
-            AppTheme.valueOf(
-                preferences[Keys.APP_THEME] ?: AppTheme.SYSTEM.name
-            )
+            try {
+                AppTheme.valueOf(
+                    preferences[Keys.APP_THEME] ?: AppTheme.SYSTEM.name
+                )
+            } catch (e: IllegalArgumentException) {
+                AppTheme.SYSTEM
+            }
         }
 
     // 3. (L14) 暴露 CALENDAR_VIEW Flow
     val calendarView: Flow<CalendarView> = dataStore.data
         .map { preferences ->
-            // [修改点] 安全地解析枚举值
             val viewName = preferences[Keys.CALENDAR_VIEW] ?: CalendarView.MONTH.name
             try {
                 CalendarView.valueOf(viewName)
             } catch (e: IllegalArgumentException) {
                 CalendarView.MONTH
+            }
+        }
+
+    val themePreset: Flow<ThemePreset> = dataStore.data
+        .map { preferences ->
+            try {
+                ThemePreset.valueOf(
+                    preferences[Keys.THEME_PRESET] ?: ThemePreset.WARM.name
+                )
+            } catch (e: IllegalArgumentException) {
+                ThemePreset.WARM
+            }
+        }
+
+    val appFontFamily: Flow<AppFontFamily> = dataStore.data
+        .map { preferences ->
+            try {
+                AppFontFamily.valueOf(
+                    preferences[Keys.APP_FONT_FAMILY] ?: AppFontFamily.DEFAULT.name
+                )
+            } catch (e: IllegalArgumentException) {
+                AppFontFamily.DEFAULT
             }
         }
 
@@ -72,6 +106,18 @@ class SettingsRepository(context: Context) {
     suspend fun updateCalendarView(view: CalendarView) {
         dataStore.edit { preferences ->
             preferences[Keys.CALENDAR_VIEW] = view.name
+        }
+    }
+
+    suspend fun updateThemePreset(preset: ThemePreset) {
+        dataStore.edit { preferences ->
+            preferences[Keys.THEME_PRESET] = preset.name
+        }
+    }
+
+    suspend fun updateAppFontFamily(font: AppFontFamily) {
+        dataStore.edit { preferences ->
+            preferences[Keys.APP_FONT_FAMILY] = font.name
         }
     }
 }

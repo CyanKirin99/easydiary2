@@ -10,8 +10,10 @@ import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.easydiary.data.AppFontFamily
 import com.example.easydiary.data.AppTheme
 import com.example.easydiary.data.CalendarView
+import com.example.easydiary.data.ThemePreset
 import com.example.easydiary.data.DiaryRepository
 import com.example.easydiary.data.ExportData
 import com.example.easydiary.data.SettingsRepository
@@ -93,6 +95,8 @@ class DiaryViewModel(
     // 应用设置
     val appTheme: Flow<AppTheme> = settingsRepository.appTheme
     val calendarView: Flow<CalendarView> = settingsRepository.calendarView
+    val themePreset: Flow<ThemePreset> = settingsRepository.themePreset
+    val appFontFamily: Flow<AppFontFamily> = settingsRepository.appFontFamily
 
     // 数据库数据
     val allEntries: StateFlow<List<DiaryEntry>> = repository.getAllDiaryEntries()
@@ -304,6 +308,18 @@ class DiaryViewModel(
     fun updateCalendarView(view: CalendarView) {
         viewModelScope.launch {
             settingsRepository.updateCalendarView(view)
+        }
+    }
+
+    fun updateThemePreset(preset: ThemePreset) {
+        viewModelScope.launch {
+            settingsRepository.updateThemePreset(preset)
+        }
+    }
+
+    fun updateAppFontFamily(font: AppFontFamily) {
+        viewModelScope.launch {
+            settingsRepository.updateAppFontFamily(font)
         }
     }
 
