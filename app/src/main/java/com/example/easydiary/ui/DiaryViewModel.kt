@@ -51,7 +51,8 @@ import java.util.zip.ZipOutputStream
  */
 data class DiaryUiState(
     val selectedDate: LocalDate = LocalDate.now(),
-    val logTypes: List<LogType> = emptyList()
+    val logTypes: List<LogType> = emptyList(),
+    val statisticsFilterLogTypeId: Long? = null
 )
 
 /**
@@ -304,6 +305,10 @@ class DiaryViewModel(
         viewModelScope.launch {
             settingsRepository.updateCalendarView(view)
         }
+    }
+
+    fun updateStatisticsFilter(logTypeId: Long?) {
+        _uiState.update { it.copy(statisticsFilterLogTypeId = logTypeId) }
     }
 
     // --- 媒体文件处理 ---

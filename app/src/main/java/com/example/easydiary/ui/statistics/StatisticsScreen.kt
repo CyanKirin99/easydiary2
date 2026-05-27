@@ -70,7 +70,12 @@ fun StatisticsScreen(
     val allLogs by viewModel.allLogItemsWithTexts.collectAsState()
     val allEntries by viewModel.allEntries.collectAsState()
 
-    var selectedLogTypeId by remember { mutableStateOf<Long?>(null) }
+    var selectedLogTypeId by remember { mutableStateOf(uiState.statisticsFilterLogTypeId) }
+
+    // 从 ViewModel 同步筛选状态（例如从 EntryScreen 返回时）
+    LaunchedEffect(uiState.statisticsFilterLogTypeId) {
+        selectedLogTypeId = uiState.statisticsFilterLogTypeId
+    }
 
     // 根据选择的 LogType 筛选日志列表
     val filteredLogs = remember(selectedLogTypeId, allLogs) {
@@ -141,6 +146,7 @@ fun StatisticsScreen(
                 selectedLogTypeId = selectedLogTypeId,
                 onFilterSelect = {
                     selectedLogTypeId = it
+                    viewModel.updateStatisticsFilter(it)
                     // 重置图表偏移量
                     chartDayOffset = 0
                     accumulatedDragPx = 0f
