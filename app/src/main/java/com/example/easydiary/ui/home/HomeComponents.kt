@@ -263,7 +263,7 @@ fun CalendarGrid(
         columns = GridCells.Fixed(7),
         modifier = Modifier.fillMaxSize()
     ) {
-        items(calendarDays) { date ->
+        itemsIndexed(calendarDays, key = { index, date -> date?.toEpochDay() ?: (-1 - index).toLong() }) { _, date ->
             if (date == null) {
                 // 空白单元格
                 Box(Modifier.padding(4.dp).aspectRatio(0.75f))
@@ -301,7 +301,7 @@ fun MonthPickerGrid(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        itemsIndexed(monthNames) { index, name ->
+        itemsIndexed(monthNames, key = { index, _ -> "month_$index" }) { index, name ->
             val monthValue = index + 1
             MonthCell(
                 text = name,
@@ -367,7 +367,7 @@ fun WeekPickerGrid(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(weeks) { (weekNum, firstDay) ->
+        items(weeks, key = { "week_${it.first}_${it.second}" }) { (weekNum, firstDay) ->
             WeekCell(
                 weekNum = weekNum,
                 startDate = firstDay,
@@ -520,9 +520,12 @@ fun WeekDayCard(
 fun WeekViewGrid(
     selectedDate: LocalDate,
     entriesMap: Map<LocalDate, DiaryEntry>,
-    logItemsMap: Map<LocalDate, List<LogItemWithTexts>>,
+    allLogs: List<LogItemWithTexts>,
     onDateClick: (LocalDate) -> Unit
 ) {
+    val logItemsMap = remember(allLogs) {
+        allLogs.groupBy { LocalDate.parse(it.logItem.diaryDate) }
+    }
     val weekDays = remember(selectedDate) {
         getWeekDays(selectedDate)
     }
@@ -531,7 +534,7 @@ fun WeekViewGrid(
         columns = GridCells.Fixed(1),
         modifier = Modifier.fillMaxSize()
     ) {
-        items(weekDays) { date ->
+        items(weekDays, key = { it.toEpochDay() }) { date ->
             WeekDayCard(
                 date = date,
                 entry = entriesMap[date],
