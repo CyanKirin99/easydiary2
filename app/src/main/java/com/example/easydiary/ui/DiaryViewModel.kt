@@ -458,7 +458,7 @@ class DiaryViewModel(
     private fun csvEscape(data: String?): String {
         if (data == null) return ""
         val escaped = data.replace("\"", "\"\"")
-        return if (escaped.contains(",") || escaped.contains("\n")) {
+        return if (escaped.contains(",") || escaped.contains("\n") || escaped.contains("\r")) {
             "\"$escaped\""
         } else {
             escaped
@@ -505,12 +505,43 @@ class DiaryViewModel(
     private val csvRegex = ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex()
 
     private fun String.removeCsvQuotes(): String {
-        return this.removeSurrounding("\"").replace("\"\"", "\"")
+        return this.removeSurrounding("\"").replace("\"\"", "\"").replace("\\n", "\n")
+    }
+
+    private fun readCsvLines(content: String): List<String> {
+        val rawLines = content.lines()
+        val result = mutableListOf<String>()
+        val current = StringBuilder()
+        var inQuotes = false
+
+        for (line in rawLines) {
+            if (current.isEmpty()) {
+                current.append(line)
+            } else {
+                current.append("\n").append(line)
+            }
+
+            for (ch in line) {
+                if (ch == '"') inQuotes = !inQuotes
+            }
+
+            if (!inQuotes) {
+                result.add(current.toString())
+                current.clear()
+            }
+        }
+
+        if (current.isNotEmpty()) {
+            result.add(current.toString())
+        }
+
+        return result
     }
 
     private fun parseEntriesCsv(content: String): List<DiaryEntry> {
-        return content.lines().drop(1).filter { it.isNotBlank() }.map { line ->
+        return readCsvLines(content).drop(1).filter { it.isNotBlank() }.mapNotNull { line ->
             val parts = line.split(csvRegex, limit = 3)
+            if (parts.size < 3) return@mapNotNull null
             DiaryEntry(
                 date = parts[0].removeCsvQuotes(),
                 moodScore = parts[1].trim().toInt(),
@@ -519,8 +550,9 @@ class DiaryViewModel(
         }
     }
     private fun parseLogTypesCsv(content: String): List<LogType> {
-        return content.lines().drop(1).filter { it.isNotBlank() }.map { line ->
+        return readCsvLines(content).drop(1).filter { it.isNotBlank() }.mapNotNull { line ->
             val parts = line.split(csvRegex, limit = 6)
+            if (parts.size < 6) return@mapNotNull null
             LogType(
                 id = parts[0].trim().toLong(),
                 name = parts[1].removeCsvQuotes(),
@@ -649,8 +681,9 @@ class DiaryViewModel(
             val logTypes = parseLogTypesCsv(csvMap["log_types.csv"] ?: "")
 
             // 2a. 解析 LogItems，并转换媒体路径
-            val logItems = csvMap["log_items.csv"]?.lines()?.drop(1)?.filter { it.isNotBlank() }?.map {
+            val logItems = readCsvLines(csvMap["log_items.csv"] ?: "").drop(1).filter { it.isNotBlank() }.mapNotNull {
                 val parts = it.split(csvRegex, limit = 5)
+                if (parts.size < 5) return@mapNotNull null
 
                 val relativePath = if(parts[4].trim() == "null") null else parts[4].removeCsvQuotes().trim()
                 // 使用映射表查找新的绝对路径
@@ -663,18 +696,19 @@ class DiaryViewModel(
                     if(parts[3].trim() == "null") null else parts[3].trim().toFloat(),
                     newAbsolutePath // 使用新的路径
                 )
-            } ?: emptyList()
+            }
 
             // 2b. 解析 TextEntries
-            val textEntries = csvMap["text_entries.csv"]?.lines()?.drop(1)?.filter { it.isNotBlank() }?.map {
+            val textEntries = readCsvLines(csvMap["text_entries.csv"] ?: "").drop(1).filter { it.isNotBlank() }.mapNotNull {
                 val parts = it.split(csvRegex, limit = 4)
+                if (parts.size < 4) return@mapNotNull null
                 TextEntry(
                     parts[0].trim().toLong(),
                     parts[1].trim().toLong(),
                     parts[2].removeCsvQuotes(),
                     parts[3].trim().toInt()
                 )
-            } ?: emptyList()
+            }
 
             if (entries.isEmpty() || logTypes.isEmpty()) {
                 return@withContext Result.failure(Exception("文件为空或 'diary_entries.csv' / 'log_types.csv' 缺失"))

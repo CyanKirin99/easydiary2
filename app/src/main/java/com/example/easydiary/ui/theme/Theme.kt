@@ -17,11 +17,14 @@ private val LightColorScheme = lightColorScheme(
     primary = LightPrimary,
     onPrimary = LightOnPrimary,
     secondary = LightSecondary,
+    tertiary = LightTertiary,
     background = LightBackground,
     surface = LightSurface,
     onBackground = LightOnSurface,
     onSurface = LightOnSurface,
-    surfaceVariant = LightSurfaceVariant
+    surfaceVariant = LightSurfaceVariant,
+    outline = LightOutline,
+    outlineVariant = LightOutline
 )
 
 // 深色配色方案
@@ -29,11 +32,14 @@ private val DarkColorScheme = darkColorScheme(
     primary = DarkPrimary,
     onPrimary = DarkOnPrimary,
     secondary = DarkSecondary,
+    tertiary = DarkTertiary,
     background = DarkBackground,
     surface = DarkSurface,
     onBackground = DarkOnSurface,
     onSurface = DarkOnSurface,
-    surfaceVariant = DarkSurfaceVariant
+    surfaceVariant = DarkSurfaceVariant,
+    outline = DarkOutline,
+    outlineVariant = DarkOutline
 )
 
 @Composable
@@ -48,7 +54,7 @@ fun EasyDiaryTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb() // 状态栏和背景同色
+            window.statusBarColor = colorScheme.background.toArgb()
             // 设置状态栏图标和文字颜色 (浅色背景 -> 深色图标; 深色背景 -> 浅色图标)
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }

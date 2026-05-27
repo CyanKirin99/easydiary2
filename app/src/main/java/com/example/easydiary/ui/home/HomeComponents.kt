@@ -250,10 +250,9 @@ fun CalendarGrid(
     onDateClick: (LocalDate) -> Unit
 ) {
     val firstDayOfMonth = currentMonth.atDay(1)
-    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // 周日(0) ... 周六(6)
+    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7
     val daysInMonth = currentMonth.lengthOfMonth()
 
-    // 填充网格数据，空白处用 null
     val calendarDays = mutableListOf<LocalDate?>()
     repeat(firstDayOfWeek) { calendarDays.add(null) }
     for (day in 1..daysInMonth) {
