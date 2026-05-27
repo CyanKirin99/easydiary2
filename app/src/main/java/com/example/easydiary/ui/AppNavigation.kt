@@ -126,10 +126,10 @@ fun AppNavigation(
             navController = navController,
             startDestination = Screen.Home.route,
             modifier = Modifier.padding(paddingValues),
-            enterTransition = { fadeIn(animationSpec = tween(350)) },
-            exitTransition = { fadeOut(animationSpec = tween(350)) },
-            popEnterTransition = { fadeIn(animationSpec = tween(350)) },
-            popExitTransition = { fadeOut(animationSpec = tween(350)) }
+            enterTransition = { fadeIn(animationSpec = tween(500)) },
+            exitTransition = { fadeOut(animationSpec = tween(500)) },
+            popEnterTransition = { fadeIn(animationSpec = tween(500)) },
+            popExitTransition = { fadeOut(animationSpec = tween(500)) }
         ) {
 
             // --- 主页 ---
