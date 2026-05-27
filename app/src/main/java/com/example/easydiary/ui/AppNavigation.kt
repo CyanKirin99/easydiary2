@@ -25,6 +25,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
@@ -122,7 +125,11 @@ fun AppNavigation(
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            modifier = Modifier.padding(paddingValues)
+            modifier = Modifier.padding(paddingValues),
+            enterTransition = { fadeIn(animationSpec = tween(350)) },
+            exitTransition = { fadeOut(animationSpec = tween(350)) },
+            popEnterTransition = { fadeIn(animationSpec = tween(350)) },
+            popExitTransition = { fadeOut(animationSpec = tween(350)) }
         ) {
 
             // --- 主页 ---
