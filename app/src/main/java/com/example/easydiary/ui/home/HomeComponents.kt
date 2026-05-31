@@ -2,8 +2,12 @@
 package com.example.easydiary.ui.home
 
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,11 +39,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import com.example.easydiary.data.CalendarView
 import com.example.easydiary.data.model.DiaryEntry
 import com.example.easydiary.data.model.LogItemWithTexts
+import com.example.easydiary.util.LunarUtil
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -70,9 +82,31 @@ fun DayCell(
     onClick: () -> Unit
 ) {
     val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
+    val lunarInfo = remember(date) { LunarUtil.getLunarInfo(date) }
+    val lunarDisplay = remember(lunarInfo) {
+        when {
+            lunarInfo.festivals.isNotEmpty() -> lunarInfo.festivals.first()
+            lunarInfo.day == "初一" -> lunarInfo.month
+            lunarInfo.day == "十五" -> "十五"
+            else -> lunarInfo.day
+        }
+    }
+
+    val haptic = LocalHapticFeedback.current
+    var isPressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.90f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "dayCellScale"
+    )
 
     Box(
         modifier = Modifier
+            .scale(scale)
             .padding(4.dp)
             .aspectRatio(0.75f)
             .clip(RoundedCornerShape(12.dp))
@@ -83,7 +117,17 @@ fun DayCell(
                     else -> Color.Transparent
                 }
             )
-            .clickable(onClick = onClick),
+            .pointerInput(onClick) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        tryAwaitRelease()
+                        isPressed = false
+                    },
+                    onTap = { onClick() }
+                )
+            },
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(vertical = 4.dp),
@@ -93,13 +137,23 @@ fun DayCell(
             Text(
                 text = date.dayOfMonth.toString(),
                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.Unspecified,
-                fontSize = 14.sp
+                style = MaterialTheme.typography.bodyMedium
             )
             if (entry != null) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     emojis[entry.moodScore],
                     fontSize = 18.sp,
+                )
+            } else if (lunarDisplay.isNotEmpty()) {
+                Text(
+                    text = lunarDisplay,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                    else if (lunarInfo.festivals.isNotEmpty()) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -250,10 +304,9 @@ fun CalendarGrid(
     onDateClick: (LocalDate) -> Unit
 ) {
     val firstDayOfMonth = currentMonth.atDay(1)
-    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // 周日(0) ... 周六(6)
+    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7
     val daysInMonth = currentMonth.lengthOfMonth()
 
-    // 填充网格数据，空白处用 null
     val calendarDays = mutableListOf<LocalDate?>()
     repeat(firstDayOfWeek) { calendarDays.add(null) }
     for (day in 1..daysInMonth) {
@@ -264,7 +317,7 @@ fun CalendarGrid(
         columns = GridCells.Fixed(7),
         modifier = Modifier.fillMaxSize()
     ) {
-        items(calendarDays) { date ->
+        itemsIndexed(calendarDays, key = { index, date -> date?.toEpochDay() ?: (-1 - index).toLong() }) { _, date ->
             if (date == null) {
                 // 空白单元格
                 Box(Modifier.padding(4.dp).aspectRatio(0.75f))
@@ -302,7 +355,7 @@ fun MonthPickerGrid(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        itemsIndexed(monthNames) { index, name ->
+        itemsIndexed(monthNames, key = { index, _ -> "month_$index" }) { index, name ->
             val monthValue = index + 1
             MonthCell(
                 text = name,
@@ -368,7 +421,7 @@ fun WeekPickerGrid(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(weeks) { (weekNum, firstDay) ->
+        items(weeks, key = { "week_${it.first}_${it.second}" }) { (weekNum, firstDay) ->
             WeekCell(
                 weekNum = weekNum,
                 startDate = firstDay,
@@ -440,16 +493,47 @@ fun WeekDayCard(
 ) {
     val emojis = listOf("😢", "😟", "😐", "😊", "🤩")
     val dayName = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.SIMPLIFIED_CHINESE)
+    val lunarInfo = remember(date) { LunarUtil.getLunarInfo(date) }
+    val lunarDisplay = remember(lunarInfo) {
+        when {
+            lunarInfo.festivals.isNotEmpty() -> lunarInfo.festivals.first()
+            lunarInfo.day == "初一" -> lunarInfo.month
+            else -> lunarInfo.day
+        }
+    }
 
     val firstLogSnippet = remember(logs) {
         logs?.firstOrNull()?.texts?.firstOrNull()?.content
     }
 
+    val haptic = LocalHapticFeedback.current
+    var isPressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "weekDayCardScale"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(scale)
             .padding(vertical = 4.dp, horizontal = 8.dp)
-            .clickable(onClick = onClick),
+            .pointerInput(onClick) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        tryAwaitRelease()
+                        isPressed = false
+                    },
+                    onTap = { onClick() }
+                )
+            },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = when {
@@ -474,6 +558,15 @@ fun WeekDayCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.secondary
                 )
+                if (lunarDisplay.isNotEmpty()) {
+                    Text(
+                        text = lunarDisplay,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (lunarInfo.festivals.isNotEmpty()) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        maxLines = 1
+                    )
+                }
             }
 
             Spacer(Modifier.width(16.dp))
@@ -521,9 +614,12 @@ fun WeekDayCard(
 fun WeekViewGrid(
     selectedDate: LocalDate,
     entriesMap: Map<LocalDate, DiaryEntry>,
-    logItemsMap: Map<LocalDate, List<LogItemWithTexts>>,
+    allLogs: List<LogItemWithTexts>,
     onDateClick: (LocalDate) -> Unit
 ) {
+    val logItemsMap = remember(allLogs) {
+        allLogs.groupBy { LocalDate.parse(it.logItem.diaryDate) }
+    }
     val weekDays = remember(selectedDate) {
         getWeekDays(selectedDate)
     }
@@ -532,7 +628,7 @@ fun WeekViewGrid(
         columns = GridCells.Fixed(1),
         modifier = Modifier.fillMaxSize()
     ) {
-        items(weekDays) { date ->
+        items(weekDays, key = { it.toEpochDay() }) { date ->
             WeekDayCard(
                 date = date,
                 entry = entriesMap[date],

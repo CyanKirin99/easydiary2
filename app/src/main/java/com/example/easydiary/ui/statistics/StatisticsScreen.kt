@@ -70,21 +70,27 @@ fun StatisticsScreen(
     val allLogs by viewModel.allLogItemsWithTexts.collectAsState()
     val allEntries by viewModel.allEntries.collectAsState()
 
-    var selectedLogTypeId by remember { mutableStateOf<Long?>(null) }
+    var selectedLogTypeId by remember { mutableStateOf(uiState.statisticsFilterLogTypeId) }
+
+    // 从 ViewModel 同步筛选状态（例如从 EntryScreen 返回时）
+    LaunchedEffect(uiState.statisticsFilterLogTypeId) {
+        selectedLogTypeId = uiState.statisticsFilterLogTypeId
+    }
 
     // 根据选择的 LogType 筛选日志列表
-    val filteredLogs = remember(selectedLogTypeId, allLogs) {
-        if (selectedLogTypeId == null) {
-            allLogs
-        } else {
-            allLogs.filter { it.logItem.logTypeId == selectedLogTypeId }
+    val filteredLogs by remember {
+        derivedStateOf {
+            if (selectedLogTypeId == null) {
+                allLogs
+            } else {
+                allLogs.filter { it.logItem.logTypeId == selectedLogTypeId }
+            }
         }
     }
 
     // --- 图表缩放与平移状态 ---
-    val allSortedEntries = remember(allEntries) {
-        allEntries
-            .sortedBy { it.date }
+    val allSortedEntries by remember {
+        derivedStateOf { allEntries.sortedBy { it.date } }
     }
 
     // 1. 定义缩放级别 (7天, 30天, 100天)
@@ -106,17 +112,19 @@ fun StatisticsScreen(
     }
 
     // 4. 根据窗口大小和偏移量，计算当前可见的日记条目
-    val visibleEntries = remember(allSortedEntries, chartDayOffset, windowSize) {
-        if (allSortedEntries.isEmpty()) {
-            emptyList()
-        } else {
-            val endIndex = allSortedEntries.size - chartDayOffset
-            val startIndex = (endIndex - windowSize).coerceAtLeast(0)
-
-            if (startIndex > endIndex) {
+    val visibleEntries by remember {
+        derivedStateOf {
+            if (allSortedEntries.isEmpty()) {
                 emptyList()
             } else {
-                allSortedEntries.slice(startIndex until endIndex)
+                val endIndex = allSortedEntries.size - chartDayOffset
+                val startIndex = (endIndex - windowSize).coerceAtLeast(0)
+
+                if (startIndex > endIndex) {
+                    emptyList()
+                } else {
+                    allSortedEntries.slice(startIndex until endIndex)
+                }
             }
         }
     }
@@ -141,6 +149,7 @@ fun StatisticsScreen(
                 selectedLogTypeId = selectedLogTypeId,
                 onFilterSelect = {
                     selectedLogTypeId = it
+                    viewModel.updateStatisticsFilter(it)
                     // 重置图表偏移量
                     chartDayOffset = 0
                     accumulatedDragPx = 0f

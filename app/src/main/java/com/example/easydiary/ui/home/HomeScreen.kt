@@ -31,6 +31,7 @@ import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.derivedStateOf
 
 
 /**
@@ -45,14 +46,11 @@ fun HomeScreen(
     val viewMode by viewModel.calendarView.collectAsState(initial = CalendarView.MONTH)
 
     val entries by viewModel.allEntries.collectAsState()
-    val entriesMap = remember(entries) {
-        entries.associateBy { LocalDate.parse(it.date) }
+    val entriesMap by remember {
+        derivedStateOf { entries.associateBy { LocalDate.parse(it.date) } }
     }
 
     val allLogs by viewModel.allLogItemsWithTexts.collectAsState()
-    val logItemsMap = remember(allLogs) {
-        allLogs.groupBy { LocalDate.parse(it.logItem.diaryDate) }
-    }
 
     // --- 状态管理 ---
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
@@ -215,7 +213,7 @@ fun HomeScreen(
                     WeekViewGrid(
                         selectedDate = selectedDate,
                         entriesMap = entriesMap,
-                        logItemsMap = logItemsMap,
+                        allLogs = allLogs,
                         onDateClick = {
                             selectedDate = it
                             onDateClick(it)

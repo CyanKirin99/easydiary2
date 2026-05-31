@@ -12,7 +12,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.easydiary.data.AppFontFamily
 import com.example.easydiary.data.AppTheme
+import com.example.easydiary.data.ThemePreset
 import com.example.easydiary.data.DiaryDatabase
 import com.example.easydiary.data.DiaryRepository
 import com.example.easydiary.data.SettingsRepository
@@ -60,13 +62,19 @@ class MainActivity : ComponentActivity() {
 
             // 订阅主题设置
             val appTheme by viewModel.appTheme.collectAsState(initial = AppTheme.SYSTEM)
+            val themePreset by viewModel.themePreset.collectAsState(initial = ThemePreset.WARM)
+            val appFontFamily by viewModel.appFontFamily.collectAsState(initial = AppFontFamily.DEFAULT)
             val useDarkTheme = when (appTheme) {
                 AppTheme.SYSTEM -> isSystemInDarkTheme()
                 AppTheme.LIGHT -> false
                 AppTheme.DARK -> true
             }
 
-            EasyDiaryTheme(darkTheme = useDarkTheme) {
+            EasyDiaryTheme(
+                darkTheme = useDarkTheme,
+                themePreset = themePreset,
+                fontFamily = appFontFamily
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

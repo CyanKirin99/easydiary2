@@ -215,7 +215,10 @@ private fun ToggleableRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, label, modifier = Modifier.padding(end = 8.dp))
-            Text(label)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
         Switch(
             checked = checked,

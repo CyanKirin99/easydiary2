@@ -1,62 +1,69 @@
-// 文件位置: app/src/main/java/com/example/easydiary/ui/theme/Theme.kt
 package com.example.easydiary.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-
-// 浅色配色方案
-private val LightColorScheme = lightColorScheme(
-    primary = LightPrimary,
-    onPrimary = LightOnPrimary,
-    secondary = LightSecondary,
-    background = LightBackground,
-    surface = LightSurface,
-    onBackground = LightOnSurface,
-    onSurface = LightOnSurface,
-    surfaceVariant = LightSurfaceVariant
-)
-
-// 深色配色方案
-private val DarkColorScheme = darkColorScheme(
-    primary = DarkPrimary,
-    onPrimary = DarkOnPrimary,
-    secondary = DarkSecondary,
-    background = DarkBackground,
-    surface = DarkSurface,
-    onBackground = DarkOnSurface,
-    onSurface = DarkOnSurface,
-    surfaceVariant = DarkSurfaceVariant
-)
+import com.example.easydiary.data.AppFontFamily
+import com.example.easydiary.data.ThemePreset
 
 @Composable
 fun EasyDiaryTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    themePreset: ThemePreset = ThemePreset.WARM,
+    fontFamily: AppFontFamily = AppFontFamily.DEFAULT,
     content: @Composable () -> Unit
 ) {
-    // 强制使用 V2 的配色方案 (不再支持 Material You 动态颜色)
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val colors = if (darkTheme) ThemePresetDarkColors[themePreset]!! else ThemePresetColors[themePreset]!!
+
+    val colorScheme = if (darkTheme) {
+        darkColorScheme(
+            primary = colors.primary,
+            onPrimary = colors.onPrimary,
+            secondary = colors.secondary,
+            tertiary = colors.tertiary,
+            background = colors.background,
+            surface = colors.surface,
+            onBackground = colors.onSurface,
+            onSurface = colors.onSurface,
+            surfaceVariant = colors.surfaceVariant,
+            outline = colors.outline,
+            outlineVariant = colors.outline
+        )
+    } else {
+        lightColorScheme(
+            primary = colors.primary,
+            onPrimary = colors.onPrimary,
+            secondary = colors.secondary,
+            tertiary = colors.tertiary,
+            background = colors.background,
+            surface = colors.surface,
+            onBackground = colors.onSurface,
+            onSurface = colors.onSurface,
+            surfaceVariant = colors.surfaceVariant,
+            outline = colors.outline,
+            outlineVariant = colors.outline
+        )
+    }
 
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb() // 状态栏和背景同色
-            // 设置状态栏图标和文字颜色 (浅色背景 -> 深色图标; 深色背景 -> 浅色图标)
+            window.statusBarColor = colorScheme.background.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = getTypography(fontFamily),
         content = content
     )
 }

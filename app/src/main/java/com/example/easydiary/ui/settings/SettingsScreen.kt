@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.ViewDay
 import androidx.compose.material.icons.filled.WbSunny
@@ -66,6 +67,14 @@ fun SettingsScreen(
                 title = "显示模式",
                 subtitle = "切换浅色或深色模式",
                 onClick = { onNavigate(Screen.ThemeSettings.route) }
+            )
+        }
+        item {
+            SettingsItem(
+                icon = Icons.Default.Star,
+                title = "字体",
+                subtitle = "选择系统字体样式",
+                onClick = { onNavigate(Screen.FontSettings.route) }
             )
         }
 

@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.easydiary"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "2.0.1"
+        versionCode = 3
+        versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -88,6 +88,5 @@ dependencies {
     // ExifInterface (用于读取图片旋转信息)
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 
-    // 测试依赖
-    // (测试依赖...)
+    // 测试依赖（已移除，避免网络问题）
 }

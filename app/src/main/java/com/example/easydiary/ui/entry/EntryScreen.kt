@@ -214,7 +214,7 @@ fun EditModeContent(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 动态日志卡片
-        items(logTypes) { logType ->
+        items(logTypes, key = { it.id }) { logType ->
             val logData = entryState.logData[logType.id] ?: EntryScreenState.LogData()
             DynamicLogCard(
                 logType = logType,
@@ -292,7 +292,7 @@ fun ViewModeContent(
         }
 
         // 2. 日志条目
-        items(diaryDetails.logItems) { logItemWithTexts ->
+        items(diaryDetails.logItems, key = { it.logItem.id }) { logItemWithTexts ->
             val logType = logTypes.find { it.id == logItemWithTexts.logItem.logTypeId }
             ViewLogCard(
                 logItem = logItemWithTexts,
