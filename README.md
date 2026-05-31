@@ -31,10 +31,10 @@
 
 | 主页日历 | 日记编辑 | 统计分析 |
 |:---:|:---:|:---:|
-| `screenshots/home.png` | `screenshots/entry.png` | `screenshots/statistics.png` |
+| ![主页](screenshots/home.jpg) | ![日记](screenshots/entry.jpg) | ![统计](screenshots/statistic.jpg) |
 | | | |
 | **主题设置** | **字体设置** | **数据管理** |
-| `screenshots/theme.png` | `screenshots/font.png` | `screenshots/data_io.png` |
+| ![主题](screenshots/theme.jpg) | ![字体](screenshots/font.jpg) | ![数据](screenshots/data_io.jpg) |
 
 ## 技术栈
 
