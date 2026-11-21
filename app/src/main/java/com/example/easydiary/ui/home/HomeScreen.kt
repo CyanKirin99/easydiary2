@@ -5,6 +5,13 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -13,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -38,9 +46,11 @@ import androidx.compose.runtime.derivedStateOf
  * 主屏幕 (Home)，显示日历或周视图。
  * 负责处理视图模式 (月/周) 切换、日期/月份/年份选择，以及左右滑动切换。
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: DiaryViewModel,
+    onSearchClick: () -> Unit,
     onDateClick: (LocalDate) -> Unit
 ) {
     val viewMode by viewModel.calendarView.collectAsState(initial = CalendarView.MONTH)
@@ -53,8 +63,8 @@ fun HomeScreen(
     val allLogs by viewModel.allLogItemsWithTexts.collectAsState()
 
     // --- 状态管理 ---
-    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
-    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var currentMonth by rememberSaveable { mutableStateOf(YearMonth.now()) }
+    var selectedDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
 
     // 年/月选择器
     var isMonthPickerVisible by remember { mutableStateOf(false) }
@@ -160,6 +170,22 @@ fun HomeScreen(
 
         } else {
             // --- 默认日历视图 ---
+            Surface(
+                onClick = onSearchClick,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null)
+                    Text("搜索日记", style = MaterialTheme.typography.bodyLarge)
+                }
+            }
             CalendarHeader(
                 viewMode = viewMode,
                 currentMonth = currentMonth,

@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -51,6 +52,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.easydiary.ui.entry.EntryScreen
 import com.example.easydiary.ui.home.HomeScreen
+import com.example.easydiary.ui.search.DiarySearchScreen
 import com.example.easydiary.ui.io.DataIOScreen
 import com.example.easydiary.ui.settings.FontSettingsScreen
 import com.example.easydiary.ui.settings.LogTypeSettingsScreen
@@ -63,6 +65,7 @@ import java.time.LocalDate
 sealed class Screen(val route: String, val label: String? = null, val icon: ImageVector? = null) {
     object Home : Screen("home", "主页", Icons.Default.Home)
     object Settings : Screen("settings", "我的", Icons.Default.Person)
+    object Search : Screen("search")
     object Add : Screen(route = "entry") {
         const val routeTemplate = "entry/{date}"
         fun createRoute(date: LocalDate): String = "entry/${date}"
@@ -120,7 +123,7 @@ fun AppNavigation(
                         navController.navigate(Screen.Add.createRoute(LocalDate.now()))
                     }
                 )
-            } else {
+            } else if (currentDestination?.route != Screen.Search.route) {
                 Spacer(modifier = Modifier.height(80.dp))
             }
         }
@@ -137,9 +140,18 @@ fun AppNavigation(
             composable(Screen.Home.route) {
                 HomeScreen(
                     viewModel = viewModel,
+                    onSearchClick = { navController.navigate(Screen.Search.route) },
                     onDateClick = { date ->
                         navController.navigate(Screen.Add.createRoute(date))
                     }
+                )
+            }
+            composable(Screen.Search.route) {
+                DiarySearchScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                    onOpen = { date -> navController.navigate(Screen.Add.createRoute(date)) },
+                    modifier = Modifier.consumeWindowInsets(paddingValues)
                 )
             }
             composable(Screen.Settings.route) {
