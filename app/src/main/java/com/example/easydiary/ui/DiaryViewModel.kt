@@ -23,12 +23,15 @@ import com.example.easydiary.data.model.LogItem
 import com.example.easydiary.data.model.LogItemWithTexts
 import com.example.easydiary.data.model.LogType
 import com.example.easydiary.data.model.TextEntry
+import com.example.easydiary.ui.search.buildSearchDays
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -111,6 +114,13 @@ class DiaryViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    internal val searchableDays = combine(
+        repository.getAllDiaryEntries(),
+        repository.getAllLogItemsWithTexts(),
+        repository.getLogTypes(),
+        ::buildSearchDays
+    ).flowOn(Dispatchers.Default)
 
     init {
         // 订阅 LogTypes 的变化，并更新 UI 状态
